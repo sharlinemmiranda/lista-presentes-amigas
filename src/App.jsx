@@ -679,7 +679,7 @@ export default function App() {
 
       {/* Top Header */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-rose-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-3.5 flex items-center justify-between gap-2">
+        <div className="w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-3 sm:py-3.5 flex items-center justify-between gap-3">
           
           {/* Logo e Nome */}
           <div 
@@ -774,7 +774,7 @@ export default function App() {
         </div>
 
         {/* Barra de Navegação (Mural vs Minha Lista) */}
-        <div className="max-w-6xl mx-auto px-4 flex border-t border-rose-100/60 space-x-2 sm:space-x-4 pt-1">
+        <div className="w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex border-t border-rose-100/60 space-x-2 sm:space-x-4 pt-1">
           <button
             onClick={() => { setActiveTab('feed'); setSelectedFriendId(null); }}
             className={`py-2 px-3 text-xs sm:text-sm font-semibold rounded-t-xl transition flex items-center space-x-1.5 border-b-2 ${
@@ -825,29 +825,29 @@ export default function App() {
       </header>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 md:p-8">
+      <main className="flex-1 w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-5 sm:py-7">
         
         {/* Banner de Boas-Vindas */}
-        <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 rounded-3xl p-5 sm:p-7 text-white shadow-xl shadow-rose-200/50 mb-8 relative overflow-hidden">
-          <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 rounded-3xl p-6 sm:p-8 lg:p-9 text-white shadow-xl shadow-rose-200/50 mb-8 relative overflow-hidden">
+          <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
           
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="max-w-xl">
-              <div className="inline-flex items-center space-x-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-rose-100 mb-2.5">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center space-x-1.5 bg-white/20 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-rose-100 mb-3">
                 <Sparkles className="w-3.5 h-3.5 text-amber-200" />
                 <span>Presentes & Surpresas Secretas</span>
               </div>
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight font-serif">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight font-serif">
                 {currentProfile ? `Oi, ${currentProfile.name}! 💖` : 'Bem-vindas ao Clube de Presentes! 🎁'}
               </h2>
-              <p className="text-xs sm:text-sm text-rose-100 mt-1 leading-relaxed">
+              <p className="text-xs sm:text-sm text-rose-100 mt-2 leading-relaxed max-w-2xl">
                 {currentProfile 
                   ? 'Organize seus desejos de Aniversário e Natal, e reserve presentes para suas amigas em segredo!'
                   : 'Cada amiga tem seu próprio espaço com suas listas. Cadastre-se ou escolha seu nome para começar!'}
               </p>
             </div>
             
-            <div className="flex flex-wrap sm:flex-col gap-2 flex-shrink-0">
+            <div className="flex flex-wrap sm:flex-row md:flex-col gap-2.5 flex-shrink-0">
               {currentProfile ? (
                 <button
                   onClick={() => {
@@ -1056,7 +1056,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="mt-auto border-t border-rose-100/80 py-6 text-center text-xs text-rose-400 bg-white/60">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>Feito com carinho para o clube das amigas • Dados sincronizados em tempo real 💖</p>
           <button
             onClick={() => setFirebaseHelpModalOpen(true)}
@@ -1188,12 +1188,12 @@ function FriendsFeedView({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-6 pt-2">
           
           {/* Card de Adição Rápida de Nova Amiga */}
           <div 
             onClick={onOpenCreateProfile}
-            className="bg-white/60 hover:bg-white rounded-3xl p-5 border-2 border-dashed border-rose-200 hover:border-rose-400 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center text-center group min-h-[190px] shadow-sm hover:shadow-md"
+            className="bg-white/60 hover:bg-white rounded-3xl p-6 border-2 border-dashed border-rose-200 hover:border-rose-400 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center text-center group min-h-[220px] shadow-sm hover:shadow-md"
           >
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-rose-600 group-hover:text-white transition">
               <Plus className="w-6 h-6" />
@@ -1201,7 +1201,7 @@ function FriendsFeedView({
             <h4 className="font-bold text-slate-800 text-sm group-hover:text-rose-600 transition">
               Cadastrar Nova Amiga
             </h4>
-            <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+            <p className="text-[11px] text-slate-400 mt-1 max-w-[220px]">
               Clique aqui para adicionar mais uma amiga ao clube
             </p>
           </div>
@@ -1217,7 +1217,7 @@ function FriendsFeedView({
             return (
               <div 
                 key={friend.id}
-                className={`group bg-white rounded-3xl p-5 border transition-all duration-300 flex flex-col justify-between relative ${
+                className={`group bg-white rounded-3xl p-5 sm:p-6 border transition-all duration-300 flex flex-col justify-between relative ${
                   bdayInfo 
                     ? 'border-rose-300 ring-2 ring-rose-400/50 shadow-md hover:shadow-xl' 
                     : 'border-rose-100 hover:border-rose-300 shadow-sm hover:shadow-xl'
@@ -1306,7 +1306,7 @@ function FriendsFeedView({
                   </div>
 
                   {friend.notes && (
-                    <p className="text-xs text-slate-600 italic bg-rose-50/40 p-2.5 rounded-xl border border-rose-100/50 mb-3 line-clamp-2">
+                    <p className="text-xs text-slate-600 italic bg-rose-50/40 p-3 rounded-xl border border-rose-100/50 mb-3 line-clamp-3 leading-relaxed">
                       "{friend.notes}"
                     </p>
                   )}
@@ -1577,7 +1577,7 @@ function FriendDetailView({
           <p className="text-xs text-slate-500 mt-1">Essa lista ainda está vazia para esta ocasião ou com esses filtros.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-6">
           {items.map(item => {
             const isReserved = Boolean(item.reservedBy);
             const isReservedByMe = item.reservedBy === currentProfileId;
@@ -1822,7 +1822,7 @@ function MyListView({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-6">
           {filteredMyItems.map(item => {
             const priorityObj = PRIORITIES.find(p => p.id === item.priority) || PRIORITIES[1];
             const occasionObj = OCCASIONS.find(o => o.id === item.listType) || OCCASIONS[0];
