@@ -14,7 +14,10 @@ import {
   collection, 
   addDoc, 
   updateDoc, 
-  deleteDoc 
+  deleteDoc,
+  query,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { 
   Gift, 
@@ -39,7 +42,13 @@ import {
   Check,
   Globe,
   Download,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
+  HelpCircle,
+  LogOut,
+  Smile,
+  ShieldCheck,
+  ChevronRight
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -57,13 +66,18 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'amigas-wishlist';
 
+// Chave para persistir qual amiga está acessando neste celular/computador
+const STORAGE_PROFILE_KEY = 'lista_presentes_amigas_active_id';
+
 const AVATAR_COLORS = [
-  { name: 'Rosa Pastel', bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-300' },
-  { name: 'Lavanda', bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300' },
-  { name: 'Pêssego', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
-  { name: 'Menta', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300' },
-  { name: 'Azul Céu', bg: 'bg-sky-100', text: 'text-sky-700', border: 'border-sky-300' },
-  { name: 'Lilás', bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', border: 'border-fuchsia-300' },
+  { name: 'Rosa Pastel', bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-300', dot: 'bg-rose-500' },
+  { name: 'Lavanda', bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300', dot: 'bg-purple-500' },
+  { name: 'Pêssego', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300', dot: 'bg-amber-500' },
+  { name: 'Menta', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', dot: 'bg-emerald-500' },
+  { name: 'Azul Céu', bg: 'bg-sky-100', text: 'text-sky-700', border: 'border-sky-300', dot: 'bg-sky-500' },
+  { name: 'Lilás', bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', border: 'border-fuchsia-300', dot: 'bg-fuchsia-500' },
+  { name: 'Coral', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500' },
+  { name: 'Indigo', bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300', dot: 'bg-indigo-500' },
 ];
 
 const CATEGORIES = [
@@ -91,21 +105,43 @@ const PRIORITIES = [
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeProfileId, setActiveProfileId] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState(null);
+  const [firestoreError, setFirestoreError] = useState(null);
+
+  // Perfil ativo persistido no LocalStorage do navegador
+  const [activeProfileId, setActiveProfileId] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_PROFILE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
 
   const [profilesList, setProfilesList] = useState([]);
   const [wishlists, setWishlists] = useState([]);
   const [activeTab, setActiveTab] = useState('feed');
   const [selectedFriendId, setSelectedFriendId] = useState(null);
 
+  // Modais
   const [itemModalOpen, setItemModalOpen] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  
+  // Controle detalhado do modal de perfil: criar novo vs editar
+  const [profileModalState, setProfileModalState] = useState({
+    isOpen: false,
+    mode: 'create', // 'create' | 'edit'
+    profileData: null
+  });
+  
   const [switchProfileModalOpen, setSwitchProfileModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [firebaseHelpModalOpen, setFirebaseHelpModalOpen] = useState(false);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
+  const [deleteConfirmProfile, setDeleteConfirmProfile] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
+  // Filtros
   const [activeOccasion, setActiveOccasion] = useState('todas');
   const [searchFilter, setSearchFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
@@ -117,6 +153,21 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Atualiza activeProfileId e salva no localStorage
+  const handleSetActiveProfile = (profileId) => {
+    setActiveProfileId(profileId);
+    try {
+      if (profileId) {
+        localStorage.setItem(STORAGE_PROFILE_KEY, profileId);
+      } else {
+        localStorage.removeItem(STORAGE_PROFILE_KEY);
+      }
+    } catch (e) {
+      console.warn("Não foi possível acessar localStorage:", e);
+    }
+  };
+
+  // Inicialização de Autenticação Firebase
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
@@ -126,8 +177,12 @@ export default function App() {
         } else {
           await signInAnonymously(auth);
         }
+        setAuthError(null);
       } catch (err) {
-        console.error("Auth error:", err);
+        console.warn("Aviso de Auth no Firebase:", err);
+        if (isMounted) {
+          setAuthError(err.code || err.message || 'Falha ao autenticar anonimamente');
+        }
       } finally {
         if (isMounted) setLoadingAuth(false);
       }
@@ -144,27 +199,33 @@ export default function App() {
     };
   }, []);
 
+  // Listeners em tempo real do Firestore (rodando mesmo se auth estiver demorando, permitindo maior resiliência)
   useEffect(() => {
-    if (!user) return;
-
-    // Strict path for public profiles
+    // Coleção pública de perfis
     const profilesCol = collection(db, 'artifacts', appId, 'public', 'data', 'profiles');
     const unsubProfiles = onSnapshot(profilesCol, (snapshot) => {
       const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setProfilesList(docs);
+      setFirestoreError(null);
 
+      // Validação do perfil ativo: se ainda existe na lista do banco
       setActiveProfileId(prevId => {
-        if (prevId && docs.some(p => p.id === prevId)) return prevId;
-        const matched = docs.find(p => p.id === user.uid);
-        if (matched) return matched.id;
-        if (docs.length > 0 && !prevId) return docs[0].id;
-        return null;
+        if (prevId && docs.some(p => p.id === prevId)) {
+          return prevId;
+        }
+        // Se o id salvo não existe mais nos docs, limpa
+        if (prevId && docs.length > 0 && !docs.some(p => p.id === prevId)) {
+          try { localStorage.removeItem(STORAGE_PROFILE_KEY); } catch {}
+          return null;
+        }
+        return prevId || null;
       });
     }, (error) => {
       console.error("Erro ao carregar perfis:", error);
+      setFirestoreError(error.message || 'Erro de permissão no Firestore');
     });
 
-    // Strict path for public wishlists
+    // Coleção pública de presentes
     const itemsCol = collection(db, 'artifacts', appId, 'public', 'data', 'gifts');
     const unsubItems = onSnapshot(itemsCol, (snapshot) => {
       const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -177,39 +238,133 @@ export default function App() {
       unsubProfiles();
       unsubItems();
     };
-  }, [user]);
+  }, []);
 
+  // Perfil ativo atual
   const currentProfile = useMemo(() => {
+    if (!activeProfileId) return null;
     return profilesList.find(p => p.id === activeProfileId) || null;
   }, [profilesList, activeProfileId]);
 
-  const handleSaveProfile = async (formData) => {
-    if (!user) return;
+  // Abertura explícita do modal para NOVO PERFIL
+  const handleOpenCreateProfile = () => {
+    setProfileModalState({
+      isOpen: true,
+      mode: 'create',
+      profileData: null
+    });
+  };
+
+  // Abertura explícita do modal para EDITAR PERFIL
+  const handleOpenEditProfile = (profileToEdit = currentProfile) => {
+    if (!profileToEdit) {
+      handleOpenCreateProfile();
+      return;
+    }
+    setProfileModalState({
+      isOpen: true,
+      mode: 'edit',
+      profileData: profileToEdit
+    });
+  };
+
+  // Salvamento de Perfil (Criação de NOVO ou Atualização de EXISTENTE)
+  const handleSaveProfile = async (formData, mode, profileId) => {
     try {
-      const targetId = currentProfile?.id || user.uid;
-      const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', targetId);
-      const dataToSave = {
-        name: formData.name.trim() || 'Amiga',
-        birthday: formData.birthday || '',
-        notes: formData.notes || '',
-        colorIndex: formData.colorIndex || 0,
-        updatedAt: new Date().toISOString()
-      };
-      await setDoc(profileRef, dataToSave, { merge: true });
-      setActiveProfileId(targetId);
-      setProfileModalOpen(false);
-      showToast('Perfil salvo com sucesso! Seus dados estão seguros! ✨');
+      const profilesCol = collection(db, 'artifacts', appId, 'public', 'data', 'profiles');
+      const cleanName = formData.name.trim();
+
+      if (mode === 'create') {
+        // CRIAÇÃO REAL DE UM NOVO PERFIL NO FIRESTORE
+        const newProfileData = {
+          name: cleanName || 'Amiga',
+          birthday: formData.birthday?.trim() || '',
+          notes: formData.notes?.trim() || '',
+          colorIndex: Number.isInteger(formData.colorIndex) ? formData.colorIndex : 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const newDocRef = await addDoc(profilesCol, newProfileData);
+        
+        // Define o perfil recém-criado como o perfil ativo deste usuário
+        handleSetActiveProfile(newDocRef.id);
+        setProfileModalState({ isOpen: false, mode: 'create', profileData: null });
+        showToast(`Bem-vinda, ${cleanName}! Seu perfil foi criado com sucesso! 🎉`);
+      } else {
+        // EDIÇÃO DO PERFIL SELECIONADO
+        const targetId = profileId || currentProfile?.id;
+        if (!targetId) {
+          showToast('Erro: Nenhum perfil selecionado para edição.');
+          return;
+        }
+
+        const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', targetId);
+        await updateDoc(profileRef, {
+          name: cleanName || 'Amiga',
+          birthday: formData.birthday?.trim() || '',
+          notes: formData.notes?.trim() || '',
+          colorIndex: Number.isInteger(formData.colorIndex) ? formData.colorIndex : 0,
+          updatedAt: new Date().toISOString()
+        });
+
+        // Também atualiza o nome do autor nos presentes que ela já cadastrou
+        const myItems = wishlists.filter(w => w.userId === targetId);
+        myItems.forEach(async (item) => {
+          if (item.authorName !== cleanName) {
+            try {
+              const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'gifts', item.id);
+              await updateDoc(itemRef, { authorName: cleanName });
+            } catch {}
+          }
+        });
+
+        setProfileModalState({ isOpen: false, mode: 'edit', profileData: null });
+        showToast(`Perfil de ${cleanName} atualizado com sucesso! ✨`);
+      }
     } catch (err) {
-      console.error(err);
-      showToast('Erro ao atualizar perfil.');
+      console.error("Erro ao salvar perfil:", err);
+      showToast('Erro ao salvar no Firebase. Verifique sua conexão ou permissões.');
+      if (err.message && (err.message.includes('permission') || err.message.includes('PERMISSION_DENIED'))) {
+        setFirebaseHelpModalOpen(true);
+      }
     }
   };
 
+  // Exclusão de um perfil
+  const handleDeleteProfile = async (profileId) => {
+    try {
+      const profileRef = doc(db, 'artifacts', appId, 'public', 'data', 'profiles', profileId);
+      await deleteDoc(profileRef);
+
+      // Deleta presentes vinculados
+      const associatedGifts = wishlists.filter(g => g.userId === profileId);
+      for (const gift of associatedGifts) {
+        try {
+          const giftRef = doc(db, 'artifacts', appId, 'public', 'data', 'gifts', gift.id);
+          await deleteDoc(giftRef);
+        } catch {}
+      }
+
+      // Se apagou o perfil ativo, limpa
+      if (activeProfileId === profileId) {
+        handleSetActiveProfile(null);
+      }
+
+      setDeleteConfirmProfile(null);
+      setProfileModalState({ isOpen: false, mode: 'create', profileData: null });
+      showToast('Perfil removido com sucesso.');
+    } catch (err) {
+      console.error("Erro ao excluir perfil:", err);
+      showToast('Erro ao excluir perfil.');
+    }
+  };
+
+  // Salvamento de Presente
   const handleSaveGift = async (itemData) => {
-    if (!user) return;
     if (!currentProfile) {
-      setProfileModalOpen(true);
-      showToast('Crie seu perfil primeiro para associar seus presentes!');
+      handleOpenCreateProfile();
+      showToast('Cadastre ou selecione seu perfil primeiro para montar sua lista!');
       return;
     }
 
@@ -236,16 +391,20 @@ export default function App() {
       setItemModalOpen(false);
       setEditingItem(null);
     } catch (err) {
-      console.error("Erro ao salvar:", err);
+      console.error("Erro ao salvar presente:", err);
       showToast('Erro ao salvar item.');
+      if (err.message && (err.message.includes('permission') || err.message.includes('PERMISSION_DENIED'))) {
+        setFirebaseHelpModalOpen(true);
+      }
     }
   };
 
+  // Exclusão de Presente
   const handleDeleteGift = async (itemId) => {
-    if (!user) return;
     try {
       const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'gifts', itemId);
       await deleteDoc(itemRef);
+      setDeleteConfirmItem(null);
       showToast('Item removido com sucesso.');
     } catch (err) {
       console.error(err);
@@ -253,8 +412,14 @@ export default function App() {
     }
   };
 
+  // Reserva Secreta de Presente
   const handleToggleReserve = async (item) => {
-    if (!user || !currentProfile) return;
+    if (!currentProfile) {
+      setSwitchProfileModalOpen(true);
+      showToast('Identifique-se primeiro para reservar presentes para suas amigas! 💕');
+      return;
+    }
+
     if (item.userId === currentProfile.id) {
       showToast('Você não pode reservar um presente da sua própria lista! 😉');
       return;
@@ -269,7 +434,7 @@ export default function App() {
           reservedBy: null,
           reservedByName: null
         });
-        showToast('Reserva cancelada.');
+        showToast('Reserva cancelada. O presente voltou a ficar disponível.');
       } else {
         await updateDoc(itemRef, {
           reservedBy: currentProfile.id,
@@ -283,11 +448,13 @@ export default function App() {
     }
   };
 
+  // Presentes do perfil ativo
   const myItems = useMemo(() => {
     if (!currentProfile) return [];
     return wishlists.filter(item => item.userId === currentProfile.id);
   }, [wishlists, currentProfile]);
 
+  // Amiga selecionada no mural
   const activeFriend = useMemo(() => {
     if (!selectedFriendId) return null;
     return profilesList.find(p => p.id === selectedFriendId) || null;
@@ -298,6 +465,7 @@ export default function App() {
     return wishlists.filter(item => item.userId === selectedFriendId);
   }, [selectedFriendId, wishlists]);
 
+  // Filtros de presentes
   const filteredActiveItems = useMemo(() => {
     const source = selectedFriendId ? activeFriendItems : wishlists;
     return source.filter(item => {
@@ -319,96 +487,157 @@ export default function App() {
     });
   }, [selectedFriendId, activeFriendItems, wishlists, activeOccasion, searchFilter, categoryFilter, priorityFilter, showOnlyUnreserved]);
 
-  if (loadingAuth) {
+  if (loadingAuth && profilesList.length === 0) {
     return (
-      <div className="min-h-screen bg-rose-50/50 flex flex-col items-center justify-center p-4">
-        <div className="w-14 h-14 rounded-full border-4 border-rose-300 border-t-rose-600 animate-spin mb-4"></div>
-        <h2 className="text-lg font-semibold text-rose-900 font-serif">Conectando às listas das amigas...</h2>
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-purple-50 to-pink-50 flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 rounded-full border-4 border-rose-200 border-t-rose-600 animate-spin mb-4 shadow-sm"></div>
+        <h2 className="text-xl font-bold text-slate-800 font-serif">Conectando às listas das amigas...</h2>
+        <p className="text-xs text-rose-500 mt-2">Carregando desejos e aniversários ✨</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50/60 via-purple-50/40 to-pink-50/60 text-slate-800 flex flex-col font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50/70 via-purple-50/50 to-pink-50/70 text-slate-800 flex flex-col font-sans selection:bg-rose-200">
+      
       {/* Toast Feedback */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/90 text-white px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center space-x-3 transition-all">
-          <Sparkles className="w-5 h-5 text-amber-300 flex-shrink-0" />
-          <span className="text-sm font-medium">{toastMessage}</span>
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center space-x-3 transition-all border border-slate-700/50 animate-bounce-once max-w-sm">
+          <Sparkles className="w-5 h-5 text-amber-300 flex-shrink-0 animate-pulse" />
+          <span className="text-xs sm:text-sm font-medium leading-relaxed">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Alerta de Configuração Firebase (se houver erro ou aviso) */}
+      {(authError || firestoreError) && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2 text-xs flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span>
+              <strong>Aviso de Conexão:</strong> O Firebase pode precisar de configuração (Login Anônimo ou Regras do Firestore).
+            </span>
+          </div>
+          <button
+            onClick={() => setFirebaseHelpModalOpen(true)}
+            className="underline font-bold text-amber-800 hover:text-amber-950 flex items-center space-x-1"
+          >
+            <span>Como Configurar</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
       {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-rose-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setActiveTab('feed'); setSelectedFriendId(null); }}>
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-400 via-pink-400 to-purple-400 flex items-center justify-center text-white shadow-md shadow-rose-200">
-              <Gift className="w-5 h-5" />
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-rose-100 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-3.5 flex items-center justify-between gap-2">
+          
+          {/* Logo e Nome */}
+          <div 
+            className="flex items-center space-x-3 cursor-pointer group"
+            onClick={() => { setActiveTab('feed'); setSelectedFriendId(null); }}
+          >
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-rose-500 via-pink-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-rose-200 group-hover:scale-105 transition-transform">
+              <Gift className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-rose-700 to-purple-700 bg-clip-text text-transparent font-serif tracking-tight">
-                Wishlist das Amigas
-              </h1>
-              <p className="text-xs text-rose-500 font-medium hidden sm:block">Aniversários & Amigo Oculto de Natal ✨</p>
+              <div className="flex items-center space-x-1.5">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-rose-700 via-pink-700 to-purple-800 bg-clip-text text-transparent font-serif tracking-tight">
+                  Wishlist das Amigas
+                </h1>
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full hidden md:inline-block">
+                  Clube VIP
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-500 font-medium hidden sm:block">
+                Aniversários 🎂 & Amigo Oculto de Natal 🎄
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          {/* Ações do Topo */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            
+            {/* Botão Enviar Link */}
             <button
               onClick={() => setShareModalOpen(true)}
-              className="px-3.5 py-2 bg-gradient-to-r from-rose-500 to-purple-600 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-sm hover:opacity-95 transition flex items-center space-x-1.5"
+              className="px-3 py-2 bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-sm hover:shadow-md transition flex items-center space-x-1.5 active:scale-95"
+              title="Compartilhar aplicativo com as amigas"
             >
               <Share2 className="w-4 h-4" />
-              <span>Enviar Link</span>
+              <span className="hidden xs:inline">Enviar Link</span>
             </button>
 
+            {/* Perfil Ativo / Trocar Perfil / Criar Perfil */}
             {currentProfile ? (
-              <div className="flex items-center bg-white border border-rose-200 rounded-full shadow-sm p-1 pr-3 space-x-2">
+              <div className="flex items-center bg-white border border-rose-200 rounded-full shadow-sm p-1 pr-2 sm:pr-3 space-x-1.5 sm:space-x-2">
                 <button
-                  onClick={() => setProfileModalOpen(true)}
-                  className="flex items-center space-x-2 hover:opacity-80 transition"
-                  title="Editar meus dados"
+                  onClick={() => handleOpenEditProfile(currentProfile)}
+                  className="flex items-center space-x-2 hover:opacity-85 transition"
+                  title="Editar meus dados e preferências"
                 >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs uppercase ${AVATAR_COLORS[currentProfile?.colorIndex || 0].bg} ${AVATAR_COLORS[currentProfile?.colorIndex || 0].text}`}>
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase ${AVATAR_COLORS[currentProfile?.colorIndex || 0]?.bg || 'bg-rose-100'} ${AVATAR_COLORS[currentProfile?.colorIndex || 0]?.text || 'text-rose-700'}`}>
                     {currentProfile.name.slice(0, 2)}
                   </div>
-                  <span className="text-xs font-semibold text-slate-700 max-w-[85px] sm:max-w-[120px] truncate">
+                  <span className="text-xs font-bold text-slate-800 max-w-[70px] sm:max-w-[120px] truncate text-left">
                     {currentProfile.name}
                   </span>
                 </button>
 
+                <div className="h-4 w-[1px] bg-slate-200"></div>
+
                 <button
                   onClick={() => setSwitchProfileModalOpen(true)}
-                  className="text-slate-400 hover:text-purple-600 p-1 rounded-full transition"
-                  title="Trocar quem está usando"
+                  className="text-slate-400 hover:text-purple-600 p-1 rounded-full transition hover:bg-purple-50"
+                  title="Trocar quem está usando ou cadastrar nova amiga"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => setProfileModalOpen(true)}
-                className="px-3 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded-full shadow hover:bg-rose-700 transition"
-              >
-                + Criar Perfil
-              </button>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={handleOpenCreateProfile}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-sm hover:shadow transition flex items-center space-x-1.5 active:scale-95 animate-pulse"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Criar Meu Perfil</span>
+                </button>
+                {profilesList.length > 0 && (
+                  <button
+                    onClick={() => setSwitchProfileModalOpen(true)}
+                    className="px-2.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold rounded-xl transition"
+                    title="Selecione seu nome se já estiver cadastrada"
+                  >
+                    <span>Já tenho perfil</span>
+                  </button>
+                )}
+              </div>
             )}
+
+            {/* Botão de Ajuda / Firebase Config */}
+            <button
+              onClick={() => setFirebaseHelpModalOpen(true)}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition hidden sm:flex items-center justify-center"
+              title="Ajuda e Configuração do Firebase"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Tabs Bar */}
-        <div className="max-w-6xl mx-auto px-4 flex border-t border-rose-50 space-x-2 sm:space-x-4 pt-1">
+        {/* Barra de Navegação (Mural vs Minha Lista) */}
+        <div className="max-w-6xl mx-auto px-4 flex border-t border-rose-100/60 space-x-2 sm:space-x-4 pt-1">
           <button
             onClick={() => { setActiveTab('feed'); setSelectedFriendId(null); }}
-            className={`py-2 px-3 text-xs sm:text-sm font-medium rounded-t-lg transition flex items-center space-x-1.5 border-b-2 ${
+            className={`py-2 px-3 text-xs sm:text-sm font-semibold rounded-t-xl transition flex items-center space-x-1.5 border-b-2 ${
               activeTab === 'feed' && !selectedFriendId
-                ? 'border-rose-500 text-rose-700 bg-rose-50/50'
+                ? 'border-rose-500 text-rose-700 bg-rose-50/60'
                 : 'border-transparent text-slate-500 hover:text-rose-600'
             }`}
           >
             <Users className="w-4 h-4" />
             <span>Mural das Amigas</span>
-            <span className="bg-rose-100 text-rose-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
+            <span className="bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
               {profilesList.length}
             </span>
           </button>
@@ -416,82 +645,94 @@ export default function App() {
           <button
             onClick={() => { 
               if (!currentProfile) {
-                setProfileModalOpen(true);
-                showToast('Cadastre seu perfil para acessar sua lista!');
+                setSwitchProfileModalOpen(true);
+                showToast('Cadastre ou selecione quem você é para gerenciar suas listas! 💕');
                 return;
               }
               setActiveTab('my-list'); 
               setSelectedFriendId(null); 
             }}
-            className={`py-2 px-3 text-xs sm:text-sm font-medium rounded-t-lg transition flex items-center space-x-1.5 border-b-2 ${
+            className={`py-2 px-3 text-xs sm:text-sm font-semibold rounded-t-xl transition flex items-center space-x-1.5 border-b-2 ${
               activeTab === 'my-list'
-                ? 'border-rose-500 text-rose-700 bg-rose-50/50'
+                ? 'border-rose-500 text-rose-700 bg-rose-50/60'
                 : 'border-transparent text-slate-500 hover:text-rose-600'
             }`}
           >
             <Heart className="w-4 h-4" />
             <span>Minhas Listas</span>
-            <span className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-1">
+            <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
               {myItems.length}
             </span>
           </button>
         </div>
       </header>
 
-      {/* Main Container */}
+      {/* Conteúdo Principal */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 md:p-8">
         
-        {/* Banner with direct link share help */}
-        <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 rounded-3xl p-5 sm:p-7 text-white shadow-lg shadow-rose-200/50 mb-8 relative overflow-hidden">
+        {/* Banner de Boas-Vindas */}
+        <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 rounded-3xl p-5 sm:p-7 text-white shadow-xl shadow-rose-200/50 mb-8 relative overflow-hidden">
+          <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+          
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="max-w-xl">
-              <div className="inline-flex items-center space-x-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-rose-100 mb-2">
+              <div className="inline-flex items-center space-x-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-rose-100 mb-2.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                <span>Banco de Dados Online Ativo</span>
+                <span>Presentes & Surpresas Secretas</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight font-serif">
-                {currentProfile ? `Oi, ${currentProfile.name}! Seus desejos estão salvos 💖` : 'Bem-vinda ao Clube de Presentes! 🎁'}
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight font-serif">
+                {currentProfile ? `Oi, ${currentProfile.name}! 💖` : 'Bem-vindas ao Clube de Presentes! 🎁'}
               </h2>
-              <p className="text-xs sm:text-sm text-rose-100 mt-1">
-                Duas listas em um só lugar: 🎂 Aniversários e 🎄 Amigo Oculto de Natal. Os presentes reservados ficam em segredo!
+              <p className="text-xs sm:text-sm text-rose-100 mt-1 leading-relaxed">
+                {currentProfile 
+                  ? 'Organize seus desejos de Aniversário e Natal, e reserve presentes para suas amigas em segredo!'
+                  : 'Cada amiga tem seu próprio espaço com suas listas. Cadastre-se ou escolha seu nome para começar!'}
               </p>
             </div>
             
             <div className="flex flex-wrap sm:flex-col gap-2 flex-shrink-0">
-              <button
-                onClick={() => {
-                  if (!currentProfile) {
-                    setProfileModalOpen(true);
-                    return;
-                  }
-                  setEditingItem(null);
-                  setItemModalOpen(true);
-                }}
-                className="bg-white text-rose-700 hover:bg-rose-50 font-semibold px-4 py-2.5 rounded-2xl shadow-md text-xs sm:text-sm flex items-center justify-center space-x-1.5 transition active:scale-95"
-              >
-                <Plus className="w-4 h-4 text-rose-600" />
-                <span>Adicionar Novo Desejo</span>
-              </button>
+              {currentProfile ? (
+                <button
+                  onClick={() => {
+                    setEditingItem(null);
+                    setItemModalOpen(true);
+                  }}
+                  className="bg-white text-rose-700 hover:bg-rose-50 font-bold px-4 py-2.5 rounded-2xl shadow-md text-xs sm:text-sm flex items-center justify-center space-x-2 transition active:scale-95"
+                >
+                  <Plus className="w-4 h-4 text-rose-600" />
+                  <span>Adicionar Novo Desejo</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenCreateProfile}
+                  className="bg-white text-rose-700 hover:bg-rose-50 font-bold px-4 py-2.5 rounded-2xl shadow-md text-xs sm:text-sm flex items-center justify-center space-x-2 transition active:scale-95"
+                >
+                  <Plus className="w-4 h-4 text-rose-600" />
+                  <span>Cadastrar Meu Perfil</span>
+                </button>
+              )}
 
               <button
-                onClick={() => setShareModalOpen(true)}
+                onClick={handleOpenCreateProfile}
                 className="bg-white/20 hover:bg-white/30 text-white font-medium px-4 py-2 rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition border border-white/30"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Como Compartilhar o Link</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Cadastrar Nova Amiga</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* View Routing */}
+        {/* Navegação entre Visualizações */}
         {activeTab === 'my-list' ? (
           <MyListView 
             myItems={myItems}
             profile={currentProfile}
             onOpenAddModal={() => { setEditingItem(null); setItemModalOpen(true); }}
             onEditItem={(item) => { setEditingItem(item); setItemModalOpen(true); }}
-            onDeleteItem={handleDeleteGift}
+            onDeleteItem={(itemId) => setDeleteConfirmItem(itemId)}
+            onOpenIdentify={() => setSwitchProfileModalOpen(true)}
+            onOpenCreateProfile={handleOpenCreateProfile}
           />
         ) : selectedFriendId && activeFriend ? (
           <FriendDetailView 
@@ -517,16 +758,18 @@ export default function App() {
             wishlists={wishlists}
             currentProfileId={currentProfile?.id}
             onSelectFriend={(fId) => setSelectedFriendId(fId)}
-            onOpenMyProfile={() => setProfileModalOpen(true)}
+            onOpenCreateProfile={handleOpenCreateProfile}
+            onEditProfile={handleOpenEditProfile}
             onSwitchProfile={(fId) => {
-              setActiveProfileId(fId);
-              showToast('Perfil alternado com sucesso!');
+              handleSetActiveProfile(fId);
+              const found = profilesList.find(p => p.id === fId);
+              showToast(`Conectada como ${found?.name || 'Amiga'}! ✨`);
             }}
           />
         )}
       </main>
 
-      {/* Item Modal */}
+      {/* Modal de Item (Novo ou Edição) */}
       {itemModalOpen && (
         <ItemModal 
           isOpen={itemModalOpen}
@@ -536,96 +779,107 @@ export default function App() {
         />
       )}
 
-      {/* Profile Modal */}
-      {profileModalOpen && (
+      {/* Modal de Perfil (Criação ou Edição) */}
+      {profileModalState.isOpen && (
         <ProfileModal 
-          isOpen={profileModalOpen}
-          initialData={currentProfile}
-          onClose={() => setProfileModalOpen(false)}
+          isOpen={profileModalState.isOpen}
+          mode={profileModalState.mode}
+          profileData={profileModalState.profileData}
+          onClose={() => setProfileModalState({ isOpen: false, mode: 'create', profileData: null })}
           onSave={handleSaveProfile}
+          onDeleteProfile={(profileId) => {
+            const p = profilesList.find(item => item.id === profileId);
+            setDeleteConfirmProfile(p || { id: profileId, name: 'este perfil' });
+          }}
         />
       )}
 
-      {/* Switch Profile Modal */}
+      {/* Modal de Troca / Seleção de Perfil */}
       {switchProfileModalOpen && (
+        <SwitchProfileModal 
+          isOpen={switchProfileModalOpen}
+          profiles={profilesList}
+          currentProfileId={currentProfile?.id}
+          onClose={() => setSwitchProfileModalOpen(false)}
+          onSelectProfile={(pId) => {
+            handleSetActiveProfile(pId);
+            setSwitchProfileModalOpen(false);
+            const p = profilesList.find(x => x.id === pId);
+            showToast(`Conectada como ${p?.name || 'Amiga'}! 💖`);
+          }}
+          onOpenCreateProfile={() => {
+            setSwitchProfileModalOpen(false);
+            handleOpenCreateProfile();
+          }}
+          onLogout={() => {
+            handleSetActiveProfile(null);
+            setSwitchProfileModalOpen(false);
+            showToast('Você desconectou. Navegando como visitante.');
+          }}
+        />
+      )}
+
+      {/* Modal de Confirmação para Excluir Presente */}
+      {deleteConfirmItem && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-rose-100">
-            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                  <User className="w-4 h-4" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 font-serif">Quem está usando agora?</h3>
-              </div>
-              <button 
-                onClick={() => setSwitchProfileModalOpen(false)} 
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-rose-100 text-center">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Trash2 className="w-6 h-6" />
             </div>
-
-            <div className="mt-4 space-y-2">
-              <p className="text-xs text-slate-500 mb-3">
-                Selecione o seu nome para gerenciar suas listas:
-              </p>
-              
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {profilesList.map(p => {
-                  const color = AVATAR_COLORS[p.colorIndex || 0] || AVATAR_COLORS[0];
-                  const isCurrent = p.id === currentProfile?.id;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        setActiveProfileId(p.id);
-                        setSwitchProfileModalOpen(false);
-                        showToast(`Conectada como ${p.name}! ✨`);
-                      }}
-                      className={`w-full p-3 rounded-2xl border flex items-center justify-between transition ${
-                        isCurrent
-                          ? 'border-purple-500 bg-purple-50/50 shadow-sm'
-                          : 'border-slate-200 hover:border-purple-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase ${color.bg} ${color.text} border ${color.border}`}>
-                          {p.name.slice(0, 2)}
-                        </div>
-                        <div className="text-left">
-                          <span className="font-bold text-sm text-slate-800 block">{p.name}</span>
-                          {p.birthday && <span className="text-[11px] text-slate-400">🎂 {p.birthday}</span>}
-                        </div>
-                      </div>
-                      {isCurrent && (
-                        <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
-                          Ativa
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSwitchProfileModalOpen(false);
-                    setProfileModalOpen(true);
-                  }}
-                  className="w-full py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-semibold transition flex items-center justify-center space-x-1"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Cadastrar Novo Perfil de Amiga</span>
-                </button>
-              </div>
+            <h3 className="text-lg font-bold text-slate-800 font-serif">Excluir presente?</h3>
+            <p className="text-xs text-slate-500 mt-1 mb-5">
+              Este item será removido definitivamente da sua lista.
+            </p>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setDeleteConfirmItem(null)}
+                className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeleteGift(deleteConfirmItem)}
+                className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition shadow-md"
+              >
+                Sim, Excluir
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Share & Deployment Guide Modal */}
+      {/* Modal de Confirmação para Excluir Perfil */}
+      {deleteConfirmProfile && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-rose-100 text-center">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 font-serif">
+              Excluir perfil de {deleteConfirmProfile.name}?
+            </h3>
+            <p className="text-xs text-slate-500 mt-1 mb-5 leading-relaxed">
+              Tem certeza? Todos os presentes cadastrados por este perfil também serão removidos.
+            </p>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setDeleteConfirmProfile(null)}
+                className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeleteProfile(deleteConfirmProfile.id)}
+                className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition shadow-md"
+              >
+                Sim, Excluir Tudo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Ajuda de Compartilhamento */}
       {shareModalOpen && (
         <ShareGuideModal 
           isOpen={shareModalOpen}
@@ -634,196 +888,127 @@ export default function App() {
         />
       )}
 
+      {/* Modal de Instruções Firebase */}
+      {firebaseHelpModalOpen && (
+        <FirebaseHelpModal 
+          isOpen={firebaseHelpModalOpen}
+          onClose={() => setFirebaseHelpModalOpen(false)}
+          showToast={showToast}
+        />
+      )}
+
       {/* Footer */}
-      <footer className="mt-auto border-t border-rose-100 py-6 text-center text-xs text-rose-400 bg-white/40">
-        <p>Feito com amor para o clube das amigas • Dados sincronizados em tempo real 💖</p>
+      <footer className="mt-auto border-t border-rose-100/80 py-6 text-center text-xs text-rose-400 bg-white/60">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p>Feito com carinho para o clube das amigas • Dados sincronizados em tempo real 💖</p>
+          <button
+            onClick={() => setFirebaseHelpModalOpen(true)}
+            className="text-[11px] text-slate-400 hover:text-purple-600 underline flex items-center space-x-1"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Status do Banco de Dados & Ajuda</span>
+          </button>
+        </div>
       </footer>
     </div>
   );
 }
 
-function ShareGuideModal({ isOpen, onClose, showToast }) {
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [customUrl, setCustomUrl] = useState('');
+// -------------------------------------------------------------
+// Componente: Mural das Amigas (Feed)
+// -------------------------------------------------------------
+function FriendsFeedView({ 
+  profiles, 
+  wishlists, 
+  currentProfileId, 
+  onSelectFriend, 
+  onOpenCreateProfile,
+  onEditProfile,
+  onSwitchProfile 
+}) {
+  const [friendSearch, setFriendSearch] = useState('');
 
-  // Check if current location is an internal preview sandbox
-  const isInternalPreview = useMemo(() => {
-    try {
-      const href = window.location.href.toLowerCase();
-      return (
-        href.includes('googleusercontent.com') ||
-        href.includes('blob:') ||
-        href.includes('/proxy') ||
-        href.includes('preview')
-      );
-    } catch {
-      return true;
-    }
-  }, []);
-
-  const safeShareUrl = useMemo(() => {
-    if (customUrl.trim()) return customUrl.trim();
-    // In top frame or deployed link, window.top or parent href
-    try {
-      if (window.top && window.top.location.href && !isInternalPreview) {
-        return window.top.location.href.split('#')[0];
-      }
-    } catch {
-      // Cross-origin restriction fallback
-    }
-    return window.location.href.split('?')[0].split('#')[0];
-  }, [customUrl, isInternalPreview]);
-
-  const copyToClipboard = async (text) => {
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-9999px";
-      textArea.style.top = "-9999px";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      document.execCommand("copy");
-      textArea.remove();
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-      showToast('Copiado para a área de transferência!');
-    } catch (err) {
-      console.error(err);
-      showToast('Por favor, selecione e copie o texto manualmente.');
-    }
-  };
-
-  const handleWhatsapp = () => {
-    const textToSend = isInternalPreview && !customUrl
-      ? `Meninas, criei nossa Lista de Desejos (Aniversário e Amigo Oculto de Natal)! Acessem nosso aplicativo para preencher!`
-      : `Meninas, criei nossa lista de presentes para Aniversários e Amigo Oculto de Natal! 🎁💖\n\nEntre pelo link para cadastrar seus pedidos e ver a lista de todo mundo:\n${safeShareUrl}`;
-    
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(textToSend)}`, '_blank');
-  };
-
-  if (!isOpen) return null;
+  const filteredFriends = useMemo(() => {
+    if (!friendSearch.trim()) return profiles;
+    return profiles.filter(p => 
+      p.name?.toLowerCase().includes(friendSearch.toLowerCase()) ||
+      p.notes?.toLowerCase().includes(friendSearch.toLowerCase()) ||
+      p.birthday?.toLowerCase().includes(friendSearch.toLowerCase())
+    );
+  }, [profiles, friendSearch]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-rose-100 my-8">
-        <div className="flex items-center justify-between pb-3 border-b border-rose-100">
-          <div className="flex items-center space-x-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-purple-600 text-white flex items-center justify-center shadow-sm">
-              <Share2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-800 font-serif">Como Compartilhar o Link</h3>
-              <p className="text-xs text-slate-500">Envie para o grupo das amigas</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-            <X className="w-5 h-5" />
-          </button>
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h3 className="text-xl sm:text-2xl font-bold text-slate-800 font-serif">
+            Mural de Amigas ({profiles.length})
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Clique na amiga para ver a lista de presentes ou clique em "Sou eu" para alternar seu acesso.
+          </p>
         </div>
 
-        <div className="mt-4 space-y-4">
-          {/* Explanation about preview 404 */}
-          {isInternalPreview && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 space-y-2">
-              <div className="flex items-center space-x-2 font-bold text-amber-800">
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>Por que deu o erro 404 ao abrir o link?</span>
-              </div>
-              <p className="leading-relaxed">
-                Este ambiente é uma <strong>área de edição e visualização de código</strong>. O endereço interno termina em códigos protegidos que a Google não permite abrir em outra aba sem autenticação.
-              </p>
-              <div className="bg-white/80 p-3 rounded-xl border border-amber-200/60 space-y-1">
-                <span className="font-semibold block text-amber-950">Como ter o link público permanente para todas:</span>
-                <p>
-                  Basta você publicar este arquivo em qualquer hospedagem gratuita como <strong>Vercel</strong>, <strong>Netlify</strong> ou <strong>GitHub Pages</strong>. O aplicativo já tem o banco de dados online configurado!
-                </p>
-              </div>
+        <div className="flex items-center space-x-2">
+          {profiles.length > 3 && (
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar amiga..."
+                value={friendSearch}
+                onChange={(e) => setFriendSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 text-xs bg-white border border-rose-200 rounded-xl focus:outline-none focus:border-rose-400"
+              />
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-              {isInternalPreview ? 'Link da sua página (quando publicada):' : 'Link do Clube das Amigas:'}
-            </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                placeholder={isInternalPreview ? "Cole aqui o link do seu site (ex: https://minha-wishlist.vercel.app)" : safeShareUrl}
-                value={customUrl || (!isInternalPreview ? safeShareUrl : '')}
-                onChange={(e) => setCustomUrl(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 text-slate-700 font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => copyToClipboard(customUrl || safeShareUrl)}
-                className="px-4 py-2.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow transition flex items-center space-x-1"
-              >
-                {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedLink ? 'Copiado!' : 'Copiar'}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
-            <button
-              type="button"
-              onClick={handleWhatsapp}
-              className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md transition flex items-center justify-center space-x-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Enviar no WhatsApp</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
-            >
-              Fechar
-            </button>
-          </div>
+          <button
+            onClick={onOpenCreateProfile}
+            className="bg-white border-2 border-rose-300 hover:border-rose-500 text-rose-700 hover:bg-rose-50 text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-sm flex items-center space-x-1.5 whitespace-nowrap active:scale-95"
+          >
+            <Plus className="w-4 h-4 text-rose-600" />
+            <span>Cadastrar Nova Amiga</span>
+          </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function FriendsFeedView({ profiles, wishlists, currentProfileId, onSelectFriend, onOpenMyProfile, onSwitchProfile }) {
-  return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
-        <div>
-          <h3 className="text-xl font-bold text-slate-800 font-serif">Mural de Amigas ({profiles.length})</h3>
-          <p className="text-xs text-slate-500">Veja a lista de cada uma ou clique em "Sou eu" para alternar seu acesso</p>
-        </div>
-
-        <button
-          onClick={onOpenMyProfile}
-          className="bg-white border border-rose-200 hover:border-rose-400 text-rose-700 text-xs font-semibold px-3 py-2 rounded-xl transition shadow-sm flex items-center space-x-1.5 self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5 text-rose-600" />
-          <span>Cadastrar Nova Amiga</span>
-        </button>
       </div>
 
       {profiles.length === 0 ? (
-        <div className="bg-white rounded-3xl p-10 text-center border border-dashed border-rose-200 shadow-sm max-w-md mx-auto">
+        <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-rose-200 shadow-sm max-w-md mx-auto">
           <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
             <Users className="w-8 h-8" />
           </div>
-          <h4 className="text-base font-bold text-slate-800">Nenhuma amiga cadastrada ainda</h4>
-          <p className="text-xs text-slate-500 mt-1 mb-4">Crie o seu perfil para começar a adicionar os presentes!</p>
+          <h4 className="text-base font-bold text-slate-800 font-serif">Nenhuma amiga cadastrada ainda</h4>
+          <p className="text-xs text-slate-500 mt-1 mb-5 leading-relaxed">
+            Seja a primeira a cadastrar seu perfil! Em seguida, compartilhe o link no grupo do WhatsApp para as outras amigas adicionarem seus nomes.
+          </p>
           <button
-            onClick={onOpenMyProfile}
-            className="bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold px-4 py-2 rounded-xl transition"
+            onClick={onOpenCreateProfile}
+            className="bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-2xl shadow-md transition"
           >
-            Cadastrar Meu Perfil
+            + Cadastrar Meu Perfil Agora
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-          {profiles.map(friend => {
+          
+          {/* Card de Adição Rápida de Nova Amiga */}
+          <div 
+            onClick={onOpenCreateProfile}
+            className="bg-white/60 hover:bg-white rounded-3xl p-5 border-2 border-dashed border-rose-200 hover:border-rose-400 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center text-center group min-h-[190px] shadow-sm hover:shadow-md"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-rose-600 group-hover:text-white transition">
+              <Plus className="w-6 h-6" />
+            </div>
+            <h4 className="font-bold text-slate-800 text-sm group-hover:text-rose-600 transition">
+              Cadastrar Nova Amiga
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+              Clique aqui para adicionar mais uma amiga ao clube
+            </p>
+          </div>
+
+          {filteredFriends.map(friend => {
             const friendItems = wishlists.filter(w => w.userId === friend.id);
             const niverCount = friendItems.filter(i => !i.listType || i.listType === 'aniversario' || i.listType === 'ambas').length;
             const natalCount = friendItems.filter(i => i.listType === 'natal' || i.listType === 'ambas').length;
@@ -835,42 +1020,50 @@ function FriendsFeedView({ profiles, wishlists, currentProfileId, onSelectFriend
                 key={friend.id}
                 className="group bg-white rounded-3xl p-5 border border-rose-100 hover:border-rose-300 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
               >
-                <div className={`absolute top-0 left-0 right-0 h-2 ${color.bg}`} />
+                <div className={`absolute top-0 left-0 right-0 h-2.5 ${color.bg}`} />
                 
                 <div>
-                  <div className="flex items-start justify-between mb-3 mt-1">
+                  <div className="flex items-start justify-between mb-3 mt-1.5">
                     <div 
-                      className="flex items-center space-x-3 cursor-pointer"
+                      className="flex items-center space-x-3 cursor-pointer flex-1 min-w-0"
                       onClick={() => onSelectFriend(friend.id)}
                     >
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm ${color.bg} ${color.text} border ${color.border}`}>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm ${color.bg} ${color.text} border ${color.border} flex-shrink-0`}>
                         {friend.name ? friend.name.slice(0, 2).toUpperCase() : 'AM'}
                       </div>
-                      <div>
+                      <div className="min-w-0 pr-1">
                         <div className="flex items-center space-x-1.5">
-                          <h4 className="font-bold text-slate-800 text-base group-hover:text-rose-600 transition">
+                          <h4 className="font-bold text-slate-800 text-base group-hover:text-rose-600 transition truncate">
                             {friend.name}
                           </h4>
                           {isMe && (
-                            <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-semibold">
+                            <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold flex-shrink-0">
                               Você
                             </span>
                           )}
                         </div>
                         {friend.birthday && (
                           <div className="flex items-center space-x-1 text-[11px] text-slate-500 mt-0.5">
-                            <Calendar className="w-3 h-3 text-rose-400" />
-                            <span>Niver: {friend.birthday}</span>
+                            <Calendar className="w-3 h-3 text-rose-400 flex-shrink-0" />
+                            <span className="truncate">Niver: {friend.birthday}</span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {!isMe && (
+                    {isMe ? (
+                      <button
+                        onClick={() => onEditProfile(friend)}
+                        className="p-1.5 text-slate-400 hover:text-purple-600 rounded-lg hover:bg-purple-50 transition"
+                        title="Editar meus dados"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    ) : (
                       <button
                         onClick={() => onSwitchProfile(friend.id)}
-                        className="text-[11px] font-semibold text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-xl transition"
-                        title="Se você é essa pessoa, clique para alternar"
+                        className="text-[11px] font-bold text-purple-600 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-xl transition flex-shrink-0"
+                        title="Se você é essa amiga, clique para assumir este perfil"
                       >
                         Sou eu
                       </button>
@@ -903,7 +1096,7 @@ function FriendsFeedView({ profiles, wishlists, currentProfileId, onSelectFriend
                   
                   <button 
                     onClick={() => onSelectFriend(friend.id)}
-                    className="text-xs font-semibold text-rose-600 flex items-center space-x-1 group-hover:translate-x-1 transition"
+                    className="text-xs font-bold text-rose-600 flex items-center space-x-1 group-hover:translate-x-1 transition"
                   >
                     <span>Ver lista</span>
                     <span>→</span>
@@ -918,6 +1111,9 @@ function FriendsFeedView({ profiles, wishlists, currentProfileId, onSelectFriend
   );
 }
 
+// -------------------------------------------------------------
+// Componente: Lista Detalhada de uma Amiga
+// -------------------------------------------------------------
 function FriendDetailView({ 
   friend, 
   items, 
@@ -944,12 +1140,12 @@ function FriendDetailView({
         <div className="flex items-center space-x-4">
           <button 
             onClick={onBack}
-            className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition font-medium text-xs sm:text-sm"
+            className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition font-semibold text-xs sm:text-sm flex items-center space-x-1"
           >
-            ← Voltar
+            <span>← Voltar</span>
           </button>
           
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl ${color.bg} ${color.text} border ${color.border}`}>
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl ${color.bg} ${color.text} border ${color.border} shadow-sm`}>
             {friend.name ? friend.name.slice(0, 2).toUpperCase() : 'AM'}
           </div>
 
@@ -966,7 +1162,7 @@ function FriendDetailView({
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
               {friend.birthday && (
-                <span className="flex items-center space-x-1 bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md font-medium">
+                <span className="flex items-center space-x-1 bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md font-semibold">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>Aniversário: {friend.birthday}</span>
                 </span>
@@ -977,18 +1173,18 @@ function FriendDetailView({
         </div>
 
         {friend.notes && (
-          <div className="text-xs bg-amber-50/80 border border-amber-200 text-amber-900 p-3 rounded-2xl max-w-sm">
-            <span className="font-semibold block mb-0.5">Dicas e tamanhos de {friend.name}:</span>
-            <p className="italic">"{friend.notes}"</p>
+          <div className="text-xs bg-amber-50/90 border border-amber-200 text-amber-900 p-3.5 rounded-2xl max-w-sm">
+            <span className="font-bold block mb-0.5 text-amber-950">Dicas & Tamanhos de {friend.name}:</span>
+            <p className="italic leading-relaxed">"{friend.notes}"</p>
           </div>
         )}
       </div>
 
-      {/* Occasion Tabs */}
+      {/* Abas de Ocasião */}
       <div className="flex items-center gap-2 p-1.5 bg-white border border-rose-100 rounded-2xl shadow-sm overflow-x-auto">
         <button
           onClick={() => setActiveOccasion('todas')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
             activeOccasion === 'todas'
               ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
@@ -999,7 +1195,7 @@ function FriendDetailView({
 
         <button
           onClick={() => setActiveOccasion('aniversario')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
             activeOccasion === 'aniversario'
               ? 'bg-rose-500 text-white shadow-sm'
               : 'text-slate-600 hover:bg-rose-50'
@@ -1010,7 +1206,7 @@ function FriendDetailView({
 
         <button
           onClick={() => setActiveOccasion('natal')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
             activeOccasion === 'natal'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-emerald-50'
@@ -1020,7 +1216,7 @@ function FriendDetailView({
         </button>
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Barra de Filtro e Busca */}
       <div className="bg-white p-4 rounded-2xl border border-rose-100 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1070,11 +1266,11 @@ function FriendDetailView({
         </div>
       </div>
 
-      {/* Gifts Grid */}
+      {/* Grid de Presentes */}
       {items.length === 0 ? (
-        <div className="bg-white rounded-3xl p-10 text-center border border-dashed border-rose-200">
+        <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-rose-200">
           <Gift className="w-12 h-12 text-rose-300 mx-auto mb-2" />
-          <h4 className="text-base font-bold text-slate-700">Nenhum item encontrado</h4>
+          <h4 className="text-base font-bold text-slate-700 font-serif">Nenhum item encontrado</h4>
           <p className="text-xs text-slate-500 mt-1">Essa lista ainda está vazia para esta ocasião ou com esses filtros.</p>
         </div>
       ) : (
@@ -1122,7 +1318,7 @@ function FriendDetailView({
                   {item.notes && (
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs text-slate-600 mb-3">
                       <span className="font-semibold block text-[10px] uppercase text-slate-400">Detalhes / Tamanho / Cor:</span>
-                      <p>{item.notes}</p>
+                      <p className="leading-relaxed">{item.notes}</p>
                     </div>
                   )}
                 </div>
@@ -1144,17 +1340,17 @@ function FriendDetailView({
                   {!isMe ? (
                     <div className="pt-1">
                       {isReserved ? (
-                        <div className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-xl p-2">
-                          <div className="flex items-center space-x-1.5 text-xs text-purple-800">
-                            <Lock className="w-3.5 h-3.5 text-purple-600" />
+                        <div className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded-xl p-2.5">
+                          <div className="flex items-center space-x-1.5 text-xs text-purple-900">
+                            <Lock className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
                             <span className="font-semibold">
-                              {isReservedByMe ? 'Você reservou este presente!' : `Reservado por ${item.reservedByName || 'uma amiga'}`}
+                              {isReservedByMe ? 'Você reservou este presente! 🎁' : 'Reservado em segredo! 🤫'}
                             </span>
                           </div>
                           {isReservedByMe && (
                             <button
                               onClick={() => onToggleReserve(item)}
-                              className="text-[11px] font-bold text-rose-600 hover:underline"
+                              className="text-[11px] font-bold text-rose-600 hover:underline ml-2"
                             >
                               Cancelar
                             </button>
@@ -1163,9 +1359,9 @@ function FriendDetailView({
                       ) : (
                         <button
                           onClick={() => onToggleReserve(item)}
-                          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-xs py-2 px-3 rounded-xl shadow-sm transition flex items-center justify-center space-x-1.5 active:scale-95"
+                          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-sm transition flex items-center justify-center space-x-1.5 active:scale-95"
                         >
-                          <Gift className="w-3.5 h-3.5" />
+                          <Gift className="w-4 h-4" />
                           <span>Vou dar esse presente! (Reservar)</span>
                         </button>
                       )}
@@ -1188,7 +1384,18 @@ function FriendDetailView({
   );
 }
 
-function MyListView({ myItems, profile, onOpenAddModal, onEditItem, onDeleteItem }) {
+// -------------------------------------------------------------
+// Componente: Minhas Listas
+// -------------------------------------------------------------
+function MyListView({ 
+  myItems, 
+  profile, 
+  onOpenAddModal, 
+  onEditItem, 
+  onDeleteItem, 
+  onOpenIdentify,
+  onOpenCreateProfile 
+}) {
   const [selectedListTab, setSelectedListTab] = useState('todas');
 
   const filteredMyItems = useMemo(() => {
@@ -1202,17 +1409,49 @@ function MyListView({ myItems, profile, onOpenAddModal, onEditItem, onDeleteItem
   const niverTotal = myItems.filter(i => !i.listType || i.listType === 'aniversario' || i.listType === 'ambas').length;
   const natalTotal = myItems.filter(i => i.listType === 'natal' || i.listType === 'ambas').length;
 
+  if (!profile) {
+    return (
+      <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-rose-200 shadow-sm max-w-md mx-auto my-8">
+        <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
+          <User className="w-8 h-8" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-800 font-serif">Quem é você? 💕</h3>
+        <p className="text-xs text-slate-500 mt-1 mb-6 leading-relaxed">
+          Para ver ou adicionar presentes na sua lista, selecione seu perfil existente ou cadastre um novo!
+        </p>
+        <div className="space-y-2">
+          <button
+            onClick={onOpenCreateProfile}
+            className="w-full bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white font-bold text-xs py-3 rounded-2xl shadow-md transition"
+          >
+            + Cadastrar Meu Perfil Agora
+          </button>
+          <button
+            onClick={onOpenIdentify}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-2.5 rounded-2xl transition"
+          >
+            Já estou na lista (Escolher meu nome)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 font-serif">Minhas Listas de Desejos</h2>
-          <p className="text-xs text-slate-500">Adicione e organize o que você quer ganhar no seu Aniversário e no Natal</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 font-serif">
+            Minhas Listas de Desejos ({profile.name})
+          </h2>
+          <p className="text-xs text-slate-500">
+            Adicione e organize o que você quer ganhar no seu Aniversário e no Natal ✨
+          </p>
         </div>
 
         <button
           onClick={onOpenAddModal}
-          className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs sm:text-sm px-4 py-2.5 rounded-2xl shadow-md transition flex items-center justify-center space-x-1.5 self-start sm:self-auto"
+          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-2xl shadow-md transition flex items-center justify-center space-x-1.5 self-start sm:self-auto active:scale-95"
         >
           <Plus className="w-4 h-4" />
           <span>Novo Desejo</span>
@@ -1222,59 +1461,59 @@ function MyListView({ myItems, profile, onOpenAddModal, onEditItem, onDeleteItem
       <div className="flex items-center gap-2 p-1.5 bg-white border border-rose-100 rounded-2xl shadow-sm overflow-x-auto">
         <button
           onClick={() => setSelectedListTab('todas')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
             selectedListTab === 'todas'
               ? 'bg-slate-900 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <span>Todos os Desejos</span>
-          <span className="bg-slate-700 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-1">
+          <span className="bg-slate-700 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
             {myItems.length}
           </span>
         </button>
 
         <button
           onClick={() => setSelectedListTab('aniversario')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
             selectedListTab === 'aniversario'
               ? 'bg-rose-500 text-white shadow-sm'
               : 'text-slate-600 hover:bg-rose-50'
           }`}
         >
           <span>🎂 Lista de Aniversário</span>
-          <span className="bg-rose-200 text-rose-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-1">
+          <span className="bg-rose-200 text-rose-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
             {niverTotal}
           </span>
         </button>
 
         <button
           onClick={() => setSelectedListTab('natal')}
-          className={`px-4 py-2 text-xs font-semibold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition flex items-center space-x-1.5 whitespace-nowrap ${
             selectedListTab === 'natal'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-emerald-50'
           }`}
         >
           <span>🎄 Amigo Oculto de Natal</span>
-          <span className="bg-emerald-200 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-1">
+          <span className="bg-emerald-200 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
             {natalTotal}
           </span>
         </button>
       </div>
 
       {filteredMyItems.length === 0 ? (
-        <div className="bg-white rounded-3xl p-10 text-center border border-dashed border-rose-200 shadow-sm max-w-lg mx-auto">
+        <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-rose-200 shadow-sm max-w-lg mx-auto">
           <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
             <Gift className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">Sua lista está vazia por enquanto</h3>
+          <h3 className="text-base font-bold text-slate-800 font-serif">Sua lista está vazia por enquanto</h3>
           <p className="text-xs text-slate-500 mt-1 mb-5">
-            Cadastre os mimos que você gostaria de ganhar!
+            Cadastre os mimos que você gostaria de ganhar para que suas amigas saibam exatamente o que te dar!
           </p>
           <button
             onClick={onOpenAddModal}
-            className="bg-rose-500 hover:bg-rose-600 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition"
+            className="bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs px-5 py-2.5 rounded-2xl transition shadow-md"
           >
             Adicionar meu primeiro presente
           </button>
@@ -1318,7 +1557,7 @@ function MyListView({ myItems, profile, onOpenAddModal, onEditItem, onDeleteItem
                   {item.notes && (
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs text-slate-600 mb-3">
                       <span className="font-semibold block text-[10px] uppercase text-slate-400">Detalhes / Tamanho / Cor:</span>
-                      <p>{item.notes}</p>
+                      <p className="leading-relaxed">{item.notes}</p>
                     </div>
                   )}
                 </div>
@@ -1340,14 +1579,14 @@ function MyListView({ myItems, profile, onOpenAddModal, onEditItem, onDeleteItem
                   <div className="flex items-center justify-end space-x-2 pt-2">
                     <button
                       onClick={() => onEditItem(item)}
-                      className="p-2 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition text-xs font-medium flex items-center space-x-1"
+                      className="p-2 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition text-xs font-semibold flex items-center space-x-1"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Editar</span>
                     </button>
                     <button
                       onClick={() => onDeleteItem(item.id)}
-                      className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition text-xs font-medium flex items-center space-x-1"
+                      className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition text-xs font-semibold flex items-center space-x-1"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Excluir</span>
@@ -1363,6 +1602,286 @@ function MyListView({ myItems, profile, onOpenAddModal, onEditItem, onDeleteItem
   );
 }
 
+// -------------------------------------------------------------
+// Componente: Modal de Perfil (CRIAR NOVO vs EDITAR)
+// -------------------------------------------------------------
+function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProfile }) {
+  const isCreate = mode === 'create';
+  
+  const [name, setName] = useState('');
+  const [birthday, setBirthday] = useState('');
+  const [notes, setNotes] = useState('');
+  const [colorIndex, setColorIndex] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Inicializa o formulário de acordo com o modo
+  useEffect(() => {
+    if (isOpen) {
+      if (isCreate) {
+        setName('');
+        setBirthday('');
+        setNotes('');
+        setColorIndex(Math.floor(Math.random() * AVATAR_COLORS.length));
+      } else {
+        setName(profileData?.name || '');
+        setBirthday(profileData?.birthday || '');
+        setNotes(profileData?.notes || '');
+        setColorIndex(profileData?.colorIndex || 0);
+      }
+      setIsSubmitting(false);
+    }
+  }, [isOpen, isCreate, profileData]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await onSave({ name, birthday, notes, colorIndex }, mode, profileData?.id);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-rose-100 my-8 animate-in fade-in zoom-in-95 duration-200">
+        
+        {/* Cabeçalho do Modal */}
+        <div className="flex items-center justify-between pb-3.5 border-b border-rose-100">
+          <div className="flex items-center space-x-2.5">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isCreate ? 'bg-rose-100 text-rose-600' : 'bg-purple-100 text-purple-600'}`}>
+              {isCreate ? <Plus className="w-5 h-5" /> : <User className="w-5 h-5" />}
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 font-serif">
+                {isCreate ? 'Cadastrar Novo Perfil' : 'Editar Meus Dados'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {isCreate ? 'Crie seu perfil para montar sua lista de desejos' : 'Atualize suas informações e preferências'}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          
+          {/* Campo Nome */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Como suas amigas te chamam? *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Ex: Bia, Carol, Mari, Ju..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:bg-white transition"
+              autoFocus
+            />
+          </div>
+
+          {/* Campo Aniversário */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Data de Aniversário (Dia e Mês)
+            </label>
+            <input
+              type="text"
+              placeholder="Ex: 14 de Outubro ou 25/11"
+              value={birthday}
+              onChange={(e) => setBirthday(e.target.value)}
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:bg-white transition"
+            />
+          </div>
+
+          {/* Seletor de Cor do Avatar */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+              Cor do seu Avatar
+            </label>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {AVATAR_COLORS.map((col, idx) => (
+                <button
+                  type="button"
+                  key={col.name}
+                  onClick={() => setColorIndex(idx)}
+                  className={`w-8 h-8 rounded-full ${col.bg} border-2 flex items-center justify-center transition-all ${
+                    colorIndex === idx ? 'border-slate-800 scale-110 shadow-md ring-2 ring-rose-300' : 'border-transparent hover:scale-105'
+                  }`}
+                  title={col.name}
+                >
+                  {colorIndex === idx && <Check className="w-4 h-4 text-slate-800" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Campo Dicas e Medidas */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Dicas gerais / Medidas / O que você ama
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Ex: Calço 36, blusa M. Amo livros, papelaria fofa e maquiagem!"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:bg-white transition"
+            />
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            {!isCreate && onDeleteProfile ? (
+              <button
+                type="button"
+                onClick={() => onDeleteProfile(profileData?.id)}
+                className="text-xs font-bold text-rose-600 hover:text-rose-800 flex items-center space-x-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir Perfil</span>
+              </button>
+            ) : <div></div>}
+
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || !name.trim()}
+                className="px-5 py-2.5 text-xs font-bold bg-gradient-to-r from-rose-600 to-purple-600 hover:from-rose-700 hover:to-purple-700 text-white rounded-xl shadow-md transition disabled:opacity-50 flex items-center space-x-1.5"
+              >
+                {isSubmitting ? (
+                  <span>Salvando...</span>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                    <span>{isCreate ? 'Cadastrar Perfil ✨' : 'Salvar Alterações'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Componente: Modal de Troca / Seleção de Perfil
+// -------------------------------------------------------------
+function SwitchProfileModal({ 
+  isOpen, 
+  profiles, 
+  currentProfileId, 
+  onClose, 
+  onSelectProfile, 
+  onOpenCreateProfile,
+  onLogout 
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-rose-100 animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 font-serif">Quem está usando agora?</h3>
+              <p className="text-[11px] text-slate-500">Selecione o seu nome na lista:</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {profiles.map(p => {
+              const color = AVATAR_COLORS[p.colorIndex || 0] || AVATAR_COLORS[0];
+              const isCurrent = p.id === currentProfileId;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onSelectProfile(p.id)}
+                  className={`w-full p-3 rounded-2xl border flex items-center justify-between transition ${
+                    isCurrent
+                      ? 'border-purple-500 bg-purple-50/60 shadow-sm ring-1 ring-purple-300'
+                      : 'border-slate-200 hover:border-purple-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase ${color.bg} ${color.text} border ${color.border}`}>
+                      {p.name.slice(0, 2)}
+                    </div>
+                    <div className="text-left">
+                      <span className="font-bold text-sm text-slate-800 block">{p.name}</span>
+                      {p.birthday && <span className="text-[11px] text-slate-400">🎂 {p.birthday}</span>}
+                    </div>
+                  </div>
+                  {isCurrent && (
+                    <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                      Você está aqui ✓
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 space-y-2">
+            <button
+              type="button"
+              onClick={onOpenCreateProfile}
+              className="w-full py-2.5 bg-gradient-to-r from-rose-50 to-pink-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4 text-rose-600" />
+              <span>Sou nova por aqui (Cadastrar Novo Perfil)</span>
+            </button>
+
+            {currentProfileId && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="w-full py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold transition flex items-center justify-center space-x-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Desconectar (Navegar como visitante)</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Componente: Modal de Item (Presente)
+// -------------------------------------------------------------
 function ItemModal({ isOpen, initialData, onClose, onSave }) {
   const [title, setTitle] = useState(initialData?.title || '');
   const [listType, setListType] = useState(initialData?.listType || 'aniversario');
@@ -1371,27 +1890,46 @@ function ItemModal({ isOpen, initialData, onClose, onSave }) {
   const [link, setLink] = useState(initialData?.link || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [priority, setPriority] = useState(initialData?.priority || 'alta');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(initialData?.title || '');
+      setListType(initialData?.listType || 'aniversario');
+      setCategory(initialData?.category || CATEGORIES[0]);
+      setPrice(initialData?.price || '');
+      setLink(initialData?.link || '');
+      setNotes(initialData?.notes || '');
+      setPriority(initialData?.priority || 'alta');
+      setIsSubmitting(false);
+    }
+  }, [isOpen, initialData]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    onSave({
-      title: title.trim(),
-      listType,
-      category,
-      price: price.trim(),
-      link: link.trim(),
-      notes: notes.trim(),
-      priority
-    });
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        title: title.trim(),
+        listType,
+        category,
+        price: price.trim(),
+        link: link.trim(),
+        notes: notes.trim(),
+        priority
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-rose-100 my-8">
+      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-rose-100 my-8 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between pb-4 border-b border-rose-100">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
@@ -1401,7 +1939,7 @@ function ItemModal({ isOpen, initialData, onClose, onSave }) {
               {initialData ? 'Editar Presente' : 'Novo Desejo de Presente'}
             </h3>
           </div>
-          <button onClick={onClose} className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <button onClick={onClose} className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1419,7 +1957,7 @@ function ItemModal({ isOpen, initialData, onClose, onSave }) {
                   onClick={() => setListType(occ.id)}
                   className={`py-2 px-2 text-xs font-semibold rounded-xl border text-center transition flex flex-col items-center justify-center space-y-0.5 ${
                     listType === occ.id
-                      ? 'border-rose-500 bg-rose-50 text-rose-800 ring-2 ring-rose-300'
+                      ? 'border-rose-500 bg-rose-50 text-rose-800 ring-2 ring-rose-300 font-bold'
                       : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
@@ -1527,9 +2065,10 @@ function ItemModal({ isOpen, initialData, onClose, onSave }) {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition"
+              disabled={isSubmitting || !title.trim()}
+              className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md transition disabled:opacity-50"
             >
-              Salvar Item
+              {isSubmitting ? 'Salvando...' : 'Salvar Item'}
             </button>
           </div>
         </form>
@@ -1538,111 +2077,212 @@ function ItemModal({ isOpen, initialData, onClose, onSave }) {
   );
 }
 
-function ProfileModal({ isOpen, initialData, onClose, onSave }) {
-  const [name, setName] = useState(initialData?.name || '');
-  const [birthday, setBirthday] = useState(initialData?.birthday || '');
-  const [notes, setNotes] = useState(initialData?.notes || '');
-  const [colorIndex, setColorIndex] = useState(initialData?.colorIndex || 0);
+// -------------------------------------------------------------
+// Componente: Modal de Compartilhamento do Link
+// -------------------------------------------------------------
+function ShareGuideModal({ isOpen, onClose, showToast }) {
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [customUrl, setCustomUrl] = useState('');
+
+  const isInternalPreview = useMemo(() => {
+    try {
+      const href = window.location.href.toLowerCase();
+      return (
+        href.includes('googleusercontent.com') ||
+        href.includes('blob:') ||
+        href.includes('/proxy') ||
+        href.includes('preview')
+      );
+    } catch {
+      return true;
+    }
+  }, []);
+
+  const safeShareUrl = useMemo(() => {
+    if (customUrl.trim()) return customUrl.trim();
+    try {
+      if (window.top && window.top.location.href && !isInternalPreview) {
+        return window.top.location.href.split('#')[0];
+      }
+    } catch {}
+    return window.location.href.split('?')[0].split('#')[0];
+  }, [customUrl, isInternalPreview]);
+
+  const copyToClipboard = async (text) => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand("copy");
+      textArea.remove();
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+      showToast('Link copiado com sucesso! 🎉');
+    } catch (err) {
+      console.error(err);
+      showToast('Por favor, selecione e copie o texto manualmente.');
+    }
+  };
+
+  const handleWhatsapp = () => {
+    const textToSend = `Meninas, criei nossa lista de presentes para Aniversários e Amigo Oculto de Natal! 🎁💖\n\nEntre pelo link para cadastrar seus pedidos e ver a lista de todo mundo:\n${safeShareUrl}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(textToSend)}`, '_blank');
+  };
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onSave({ name, birthday, notes, colorIndex });
-  };
-
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-rose-100">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-rose-100 my-8">
         <div className="flex items-center justify-between pb-3 border-b border-rose-100">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-              <User className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-purple-600 text-white flex items-center justify-center shadow-sm">
+              <Share2 className="w-5 h-5" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 font-serif">Meu Perfil de Amiga</h3>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 font-serif">Como Compartilhar o Link</h3>
+              <p className="text-xs text-slate-500">Envie no grupo do WhatsApp das amigas</p>
+            </div>
           </div>
           <button onClick={onClose} className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <div className="mt-4 space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-              Como suas amigas te chamam? *
+              Link da Lista:
             </label>
-            <input
-              type="text"
-              required
-              placeholder="Ex: Bia, Carol, Ju..."
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-400 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-              Data de Aniversário (Dia e Mês)
-            </label>
-            <input
-              type="text"
-              placeholder="Ex: 14 de Outubro"
-              value={birthday}
-              onChange={(e) => setBirthday(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-400 focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-              Cor do seu Avatar
-            </label>
-            <div className="flex items-center space-x-2 pt-1">
-              {AVATAR_COLORS.map((col, idx) => (
-                <button
-                  type="button"
-                  key={col.name}
-                  onClick={() => setColorIndex(idx)}
-                  className={`w-7 h-7 rounded-full ${col.bg} border-2 transition ${
-                    colorIndex === idx ? 'border-slate-800 scale-110 shadow-sm' : 'border-transparent'
-                  }`}
-                  title={col.name}
-                />
-              ))}
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                placeholder={safeShareUrl}
+                value={customUrl || safeShareUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                className="flex-1 px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 text-slate-700 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => copyToClipboard(customUrl || safeShareUrl)}
+                className="px-4 py-2.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow transition flex items-center space-x-1"
+              >
+                {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedLink ? 'Copiado!' : 'Copiar'}</span>
+              </button>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-              Dicas gerais / Medidas / O que você ama
-            </label>
-            <textarea
-              rows={2}
-              placeholder="Ex: Calço 36, blusa M. Amo papelaria fofa e tons pastéis!"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-400 focus:bg-white"
-            />
-          </div>
-
-          <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={handleWhatsapp}
+              className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center space-x-2"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Enviar no WhatsApp das Amigas</span>
+            </button>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
             >
               Fechar
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Componente: Modal de Ajuda / Configuração do Firebase
+// -------------------------------------------------------------
+function FirebaseHelpModal({ isOpen, onClose, showToast }) {
+  const [copiedRule, setCopiedRule] = useState(false);
+
+  const rulesText = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
+
+  const copyRules = () => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = rulesText;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand("copy");
+      textArea.remove();
+      setCopiedRule(true);
+      setTimeout(() => setCopiedRule(false), 2500);
+      showToast('Regras copiadas! Cole na aba Regras do Firestore.');
+    } catch {}
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-rose-100 my-8">
+        <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+          <div className="flex items-center space-x-2">
+            <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 font-serif">Configuração do Firebase</h3>
+              <p className="text-xs text-slate-500">Como garantir que todas as amigas salvem e vejam em tempo real</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4 text-xs text-slate-600">
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-2">
+            <h4 className="font-bold text-purple-900 text-sm">Passo 1: Ativar Login Anônimo</h4>
+            <p className="leading-relaxed">
+              No console do Firebase (<strong>Authentication → Sign-in method</strong>), ative o provedor <strong>"Anônimo" (Anonymous)</strong>. Isso permite que cada celular conecte com segurança sem precisar digitar senha.
+            </p>
+          </div>
+
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-rose-900 text-sm">Passo 2: Regras do Firestore</h4>
+              <button
+                type="button"
+                onClick={copyRules}
+                className="text-xs bg-rose-200 hover:bg-rose-300 text-rose-900 font-bold px-2.5 py-1 rounded-lg flex items-center space-x-1"
+              >
+                {copiedRule ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedRule ? 'Copiado!' : 'Copiar Regras'}</span>
+              </button>
+            </div>
+            <p className="leading-relaxed">
+              No menu <strong>Firestore Database → Regras (Rules)</strong>, cole o código abaixo e clique em <strong>Publicar</strong>:
+            </p>
+            <pre className="bg-slate-900 text-slate-100 p-3 rounded-xl font-mono text-[11px] overflow-x-auto">
+              {rulesText}
+            </pre>
+          </div>
+
+          <div className="pt-2 flex justify-end">
             <button
-              type="submit"
-              className="px-5 py-2 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-md transition"
+              onClick={onClose}
+              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition"
             >
-              Salvar Perfil
+              Entendido!
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
