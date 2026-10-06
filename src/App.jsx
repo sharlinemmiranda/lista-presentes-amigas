@@ -48,7 +48,8 @@ import {
   LogOut,
   Smile,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Camera
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -91,6 +92,34 @@ const AVATAR_COLORS = [
   { name: 'Caramelo Nude', bg: 'bg-stone-200', text: 'text-stone-800', border: 'border-stone-400', dot: 'bg-stone-500' },
   { name: 'Cinza Platina', bg: 'bg-slate-200', text: 'text-slate-800', border: 'border-slate-400', dot: 'bg-slate-500' },
 ];
+
+function Avatar({ profile, size = "md", className = "" }) {
+  const color = AVATAR_COLORS[profile?.colorIndex || 0] || AVATAR_COLORS[0];
+  const sizeClasses = {
+    sm: "w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs",
+    md: "w-9 h-9 rounded-xl text-xs",
+    lg: "w-12 h-12 rounded-2xl text-base",
+    xl: "w-14 h-14 rounded-2xl text-xl",
+  }[size] || "w-10 h-10 rounded-2xl text-sm";
+
+  if (profile?.photoUrl) {
+    return (
+      <div className={`${sizeClasses} overflow-hidden border-2 ${color.border} shadow-sm flex-shrink-0 relative ${className}`}>
+        <img 
+          src={profile.photoUrl} 
+          alt={profile.name || 'Amiga'} 
+          className="w-full h-full object-cover" 
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${sizeClasses} flex items-center justify-center font-bold uppercase shadow-sm ${color.bg} ${color.text} border-2 ${color.border} flex-shrink-0 ${className}`}>
+      {profile?.name ? profile.name.slice(0, 2).toUpperCase() : 'AM'}
+    </div>
+  );
+}
 
 const CATEGORIES = [
   'Roupas & Acessórios',
@@ -293,6 +322,7 @@ export default function App() {
           birthday: formData.birthday?.trim() || '',
           notes: formData.notes?.trim() || '',
           colorIndex: Number.isInteger(formData.colorIndex) ? formData.colorIndex : 0,
+          photoUrl: formData.photoUrl || '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -317,6 +347,7 @@ export default function App() {
           birthday: formData.birthday?.trim() || '',
           notes: formData.notes?.trim() || '',
           colorIndex: Number.isInteger(formData.colorIndex) ? formData.colorIndex : 0,
+          photoUrl: formData.photoUrl || '',
           updatedAt: new Date().toISOString()
         });
 
@@ -587,9 +618,7 @@ export default function App() {
                   className="flex items-center space-x-2 hover:opacity-85 transition"
                   title="Editar meus dados e preferências"
                 >
-                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase ${AVATAR_COLORS[currentProfile?.colorIndex || 0]?.bg || 'bg-rose-100'} ${AVATAR_COLORS[currentProfile?.colorIndex || 0]?.text || 'text-rose-700'}`}>
-                    {currentProfile.name.slice(0, 2)}
-                  </div>
+                  <Avatar profile={currentProfile} size="sm" />
                   <span className="text-xs font-bold text-slate-800 max-w-[70px] sm:max-w-[120px] truncate text-left">
                     {currentProfile.name}
                   </span>
@@ -1040,9 +1069,7 @@ function FriendsFeedView({
                       className="flex items-center space-x-3 cursor-pointer flex-1 min-w-0"
                       onClick={() => onSelectFriend(friend.id)}
                     >
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm ${color.bg} ${color.text} border ${color.border} flex-shrink-0`}>
-                        {friend.name ? friend.name.slice(0, 2).toUpperCase() : 'AM'}
-                      </div>
+                      <Avatar profile={friend} size="lg" />
                       <div className="min-w-0 pr-1">
                         <div className="flex items-center space-x-1.5">
                           <h4 className="font-bold text-slate-800 text-base group-hover:text-rose-600 transition truncate">
@@ -1157,9 +1184,7 @@ function FriendDetailView({
             <span>← Voltar</span>
           </button>
           
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl ${color.bg} ${color.text} border ${color.border} shadow-sm`}>
-            {friend.name ? friend.name.slice(0, 2).toUpperCase() : 'AM'}
-          </div>
+          <Avatar profile={friend} size="xl" />
 
           <div>
             <div className="flex items-center space-x-2">
@@ -1624,6 +1649,7 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
   const [birthday, setBirthday] = useState('');
   const [notes, setNotes] = useState('');
   const [colorIndex, setColorIndex] = useState(0);
+  const [photoUrl, setPhotoUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Inicializa o formulário de acordo com o modo
@@ -1634,15 +1660,60 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
         setBirthday('');
         setNotes('');
         setColorIndex(Math.floor(Math.random() * AVATAR_COLORS.length));
+        setPhotoUrl('');
       } else {
         setName(profileData?.name || '');
         setBirthday(profileData?.birthday || '');
         setNotes(profileData?.notes || '');
         setColorIndex(profileData?.colorIndex || 0);
+        setPhotoUrl(profileData?.photoUrl || '');
       }
       setIsSubmitting(false);
     }
   }, [isOpen, isCreate, profileData]);
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione um arquivo de imagem válido.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 240;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL('image/jpeg', 0.82);
+        setPhotoUrl(compressed);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (!isOpen) return null;
 
@@ -1651,7 +1722,7 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
     if (!name.trim()) return;
     setIsSubmitting(true);
     try {
-      await onSave({ name, birthday, notes, colorIndex }, mode, profileData?.id);
+      await onSave({ name, birthday, notes, colorIndex, photoUrl }, mode, profileData?.id);
     } finally {
       setIsSubmitting(false);
     }
@@ -1686,6 +1757,52 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           
+          {/* Seção de Foto de Perfil */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+              Sua Foto de Perfil
+            </label>
+            <div className="flex items-center space-x-3.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+              <div className="relative flex-shrink-0">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm overflow-hidden border-2 ${AVATAR_COLORS[colorIndex]?.border || 'border-rose-300'} ${!photoUrl ? (AVATAR_COLORS[colorIndex]?.bg || 'bg-rose-100') + ' ' + (AVATAR_COLORS[colorIndex]?.text || 'text-rose-700') : 'bg-slate-200'}`}>
+                  {photoUrl ? (
+                    <img src={photoUrl} alt="Foto de perfil" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{name.trim() ? name.trim().slice(0, 2).toUpperCase() : 'AM'}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="cursor-pointer bg-white border border-rose-200 hover:border-rose-400 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm active:scale-95">
+                    <Camera className="w-3.5 h-3.5 text-rose-600" />
+                    <span>{photoUrl ? 'Trocar Foto' : 'Escolher Foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+
+                  {photoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPhotoUrl('')}
+                      className="text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition font-semibold"
+                    >
+                      Remover foto
+                    </button>
+                  )}
+                </div>
+                <span className="text-[11px] text-slate-400 block mt-1">
+                  {photoUrl ? 'Foto selecionada! Ela aparecerá no seu avatar.' : 'Escolha uma foto da sua galeria ou use o avatar colorido'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Campo Nome */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -1720,26 +1837,11 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-slate-700 uppercase">
-                Cor do seu Avatar ({AVATAR_COLORS.length} opções)
+                Cor de destaque ({AVATAR_COLORS.length} opções)
               </label>
               <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
                 {AVATAR_COLORS[colorIndex]?.name || 'Personalizado'}
               </span>
-            </div>
-
-            {/* Preview dinâmico do Avatar */}
-            <div className="flex items-center space-x-3 p-2.5 bg-slate-50 border border-slate-200 rounded-2xl mb-2.5">
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-sm transition-all ${AVATAR_COLORS[colorIndex]?.bg || 'bg-rose-100'} ${AVATAR_COLORS[colorIndex]?.text || 'text-rose-700'} border ${AVATAR_COLORS[colorIndex]?.border || 'border-rose-300'}`}>
-                {name.trim() ? name.trim().slice(0, 2).toUpperCase() : 'AM'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="text-xs font-bold text-slate-800 block truncate">
-                  {name.trim() || 'Seu Nome'}
-                </span>
-                <span className="text-[11px] text-slate-500 block truncate">
-                  Assim aparecerá o seu avatar no mural
-                </span>
-              </div>
             </div>
 
             {/* Grade de 20 Cores */}
@@ -1868,9 +1970,7 @@ function SwitchProfileModal({
                   }`}
                 >
                   <div className="flex items-center space-x-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase ${color.bg} ${color.text} border ${color.border}`}>
-                      {p.name.slice(0, 2)}
-                    </div>
+                    <Avatar profile={p} size="md" />
                     <div className="text-left">
                       <span className="font-bold text-sm text-slate-800 block">{p.name}</span>
                       {p.birthday && <span className="text-[11px] text-slate-400">🎂 {p.birthday}</span>}
