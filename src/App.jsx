@@ -591,7 +591,7 @@ export default function App() {
             <div>
               <div className="flex items-center space-x-1.5">
                 <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-rose-700 via-pink-700 to-purple-800 bg-clip-text text-transparent font-serif tracking-tight">
-                  Wishlist das Amigas
+                  Lista de Presentes das Luluzinhas
                 </h1>
                 <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full hidden md:inline-block">
                   Clube VIP
@@ -683,7 +683,7 @@ export default function App() {
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Mural das Amigas</span>
+            <span>Mural das Luluzinhas</span>
             <span className="bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
               {profilesList.length}
             </span>
@@ -962,7 +962,7 @@ export default function App() {
 }
 
 // -------------------------------------------------------------
-// Componente: Mural das Amigas (Feed)
+// Componente: Mural das Luluzinhas (Feed)
 // -------------------------------------------------------------
 function FriendsFeedView({ 
   profiles, 
@@ -989,7 +989,7 @@ function FriendsFeedView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h3 className="text-xl sm:text-2xl font-bold text-slate-800 font-serif">
-            Mural de Amigas ({profiles.length})
+            Mural das Luluzinhas ({profiles.length})
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Clique na amiga para ver a lista de presentes ou clique em "Sou eu" para alternar seu acesso.
