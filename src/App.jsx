@@ -42,13 +42,14 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "demo-api-key",
-  authDomain: "demo-app.firebaseapp.com",
-  projectId: "demo-app",
-  storageBucket: "demo-app.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:demo"
+const firebaseConfig = {
+  apiKey: "AIzaSyATNwJ2CFzOdDBn6i5Og-fk71T7kOwCbiI",
+  authDomain: "lista-presentes-amiga.firebaseapp.com",
+  projectId: "lista-presentes-amiga",
+  storageBucket: "lista-presentes-amiga.firebasestorage.app",
+  messagingSenderId: "215917694181",
+  appId: "1:215917694181:web:e0a8c91d534aece02d980c",
+  measurementId: "G-TS246BJL3Z"
 };
 
 const app = initializeApp(firebaseConfig);
