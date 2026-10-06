@@ -146,6 +146,102 @@ const PRIORITIES = [
   { id: 'baixa', label: 'Legal Ter 🎈', badge: 'bg-purple-500 text-white' }
 ];
 
+// -------------------------------------------------------------
+// Funções Utilitárias: Análise e Notificação de Aniversário
+// -------------------------------------------------------------
+export function parseBirthday(str) {
+  if (!str || typeof str !== 'string') return null;
+  const s = str.trim().toLowerCase();
+  if (!s) return null;
+
+  const monthMap = {
+    'jan': 1, 'janeiro': 1,
+    'fev': 2, 'fevereiro': 2,
+    'mar': 3, 'marco': 3, 'março': 3,
+    'abr': 4, 'abril': 4,
+    'mai': 5, 'maio': 5,
+    'jun': 6, 'junho': 6,
+    'jul': 7, 'julho': 7,
+    'ago': 8, 'agosto': 8,
+    'set': 9, 'setembro': 9,
+    'out': 10, 'outubro': 10,
+    'nov': 11, 'novembro': 11,
+    'dez': 12, 'dezembro': 12,
+  };
+
+  // 1. Tenta formato com nome do mês por extenso ou abreviado:
+  // Ex: "14 de Outubro", "14 de out", "14/out", "05 de Agosto", "1º de maio", "14-outubro"
+  const textMatch = s.match(/(\d{1,2})(?:º|o|°)?\s*(?:de\s*|\/|\-)?\s*([a-zçãéíóú]+)/i);
+  if (textMatch) {
+    const day = parseInt(textMatch[1], 10);
+    const rawMonth = textMatch[2].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const month = monthMap[rawMonth] || monthMap[rawMonth.slice(0, 3)];
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return { day, month };
+    }
+  }
+
+  // 2. Tenta formato numérico DD/MM ou DD/MM/AAAA (com /, - ou .)
+  const numMatch = s.match(/^(\d{1,2})[\/\.-](\d{1,2})(?:[\/\.-]\d{2,4})?$/);
+  if (numMatch) {
+    const p1 = parseInt(numMatch[1], 10);
+    const p2 = parseInt(numMatch[2], 10);
+    if (p1 >= 1 && p1 <= 31 && p2 >= 1 && p2 <= 12) {
+      return { day: p1, month: p2 };
+    }
+    if (p1 >= 1 && p1 <= 12 && p2 >= 1 && p2 <= 31) {
+      return { day: p2, month: p1 };
+    }
+  }
+
+  // 3. Formato ISO AAAA-MM-DD
+  const isoMatch = s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  if (isoMatch) {
+    const month = parseInt(isoMatch[2], 10);
+    const day = parseInt(isoMatch[3], 10);
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return { day, month };
+    }
+  }
+
+  return null;
+}
+
+export function getUpcomingBirthdayInfo(birthdayStr) {
+  const parsed = parseBirthday(birthdayStr);
+  if (!parsed) return null;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const currentYear = today.getFullYear();
+
+  // Data do aniversário no ano corrente
+  let targetDate = new Date(currentYear, parsed.month - 1, parsed.day);
+  targetDate.setHours(0, 0, 0, 0);
+
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  let diffDays = Math.round((targetDate.getTime() - today.getTime()) / MS_PER_DAY);
+
+  // Se o aniversário já passou no ano corrente, calcula para o próximo ano
+  if (diffDays < 0) {
+    targetDate = new Date(currentYear + 1, parsed.month - 1, parsed.day);
+    diffDays = Math.round((targetDate.getTime() - today.getTime()) / MS_PER_DAY);
+  }
+
+  // Regra: notificação ativa 1 mês antes da data (até 30 dias de antecedência)
+  if (diffDays >= 0 && diffDays <= 30) {
+    return {
+      day: parsed.day,
+      month: parsed.month,
+      daysLeft: diffDays,
+      isToday: diffDays === 0,
+      isTomorrow: diffDays === 1,
+    };
+  }
+
+  return null;
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -288,6 +384,11 @@ export default function App() {
     if (!activeProfileId) return null;
     return profilesList.find(p => p.id === activeProfileId) || null;
   }, [profilesList, activeProfileId]);
+
+  // Contagem de amigas com aniversário nos próximos 30 dias (1 mês de antecedência)
+  const upcomingBirthdaysCount = useMemo(() => {
+    return profilesList.filter(p => getUpcomingBirthdayInfo(p.birthday) !== null).length;
+  }, [profilesList]);
 
   // Abertura explícita do modal para NOVO PERFIL
   const handleOpenCreateProfile = () => {
@@ -687,6 +788,15 @@ export default function App() {
             <span className="bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
               {profilesList.length}
             </span>
+            {upcomingBirthdaysCount > 0 && (
+              <span 
+                className="bg-gradient-to-r from-amber-500 to-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black flex items-center space-x-1 shadow-sm animate-pulse ml-1" 
+                title={`${upcomingBirthdaysCount} amiga(s) fazendo aniversário nos próximos 30 dias!`}
+              >
+                <span>🎂</span>
+                <span>{upcomingBirthdaysCount}</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -984,6 +1094,14 @@ function FriendsFeedView({
     );
   }, [profiles, friendSearch]);
 
+  // Lista de amigas com aniversário nos próximos 30 dias (1 mês de antecedência)
+  const upcomingBirthdays = useMemo(() => {
+    return profiles
+      .map(p => ({ profile: p, info: getUpcomingBirthdayInfo(p.birthday) }))
+      .filter(item => item.info !== null)
+      .sort((a, b) => a.info.daysLeft - b.info.daysLeft);
+  }, [profiles]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
@@ -1020,6 +1138,39 @@ function FriendsFeedView({
         </div>
       </div>
 
+      {/* Banner de Celebração de Aniversários Próximos (1 mês antes) */}
+      {upcomingBirthdays.length > 0 && !friendSearch.trim() && (
+        <div className="mb-6 bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 rounded-3xl p-4 sm:p-5 text-white shadow-lg shadow-rose-500/20 border border-white/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl flex-shrink-0 shadow-inner">
+              🎂
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest bg-white/30 text-white px-2 py-0.5 rounded-full">
+                  Festa Chegando
+                </span>
+                <span className="text-xs text-rose-100 font-medium">
+                  {upcomingBirthdays.length === 1 ? '1 amiga faz aniversário este mês' : `${upcomingBirthdays.length} aniversários próximos`}
+                </span>
+              </div>
+              <h4 className="text-sm sm:text-base font-bold mt-0.5 text-white">
+                {upcomingBirthdays.map(({ profile, info }) => 
+                  info.isToday 
+                    ? `🎉 ${profile.name} (É HOJE!)` 
+                    : info.isTomorrow
+                      ? `🎈 ${profile.name} (Amanhã!)`
+                      : `🎂 ${profile.name} (em ${info.daysLeft} dias)`
+                ).join(' • ')}
+              </h4>
+              <p className="text-xs text-rose-100/90 mt-0.5">
+                Confira a lista de presentes e prepare as surpresas com antecedência! 🎁✨
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {profiles.length === 0 ? (
         <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-rose-200 shadow-sm max-w-md mx-auto">
           <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1037,7 +1188,7 @@ function FriendsFeedView({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
           
           {/* Card de Adição Rápida de Nova Amiga */}
           <div 
@@ -1061,13 +1212,43 @@ function FriendsFeedView({
             const natalCount = friendItems.filter(i => i.listType === 'natal' || i.listType === 'ambas').length;
             const color = AVATAR_COLORS[friend.colorIndex || 0] || AVATAR_COLORS[0];
             const isMe = friend.id === currentProfileId;
+            const bdayInfo = getUpcomingBirthdayInfo(friend.birthday);
 
             return (
               <div 
                 key={friend.id}
-                className="group bg-white rounded-3xl p-5 border border-rose-100 hover:border-rose-300 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
+                className={`group bg-white rounded-3xl p-5 border transition-all duration-300 flex flex-col justify-between relative ${
+                  bdayInfo 
+                    ? 'border-rose-300 ring-2 ring-rose-400/50 shadow-md hover:shadow-xl' 
+                    : 'border-rose-100 hover:border-rose-300 shadow-sm hover:shadow-xl'
+                }`}
               >
-                <div className={`absolute top-0 left-0 right-0 h-2.5 ${color.bg}`} />
+                {/* Notificação Flutuante de Aniversário Próximo (1 mês de antecedência) */}
+                {bdayInfo && (
+                  <div className="absolute -top-3.5 right-4 z-20 pointer-events-none">
+                    {bdayInfo.isToday ? (
+                      <div className="flex items-center space-x-1.5 bg-gradient-to-r from-amber-500 via-rose-500 to-pink-500 text-white text-[11px] font-black px-3.5 py-1 rounded-full shadow-lg shadow-rose-500/40 border-2 border-white animate-bounce tracking-wide">
+                        <span className="text-sm">🎉</span>
+                        <span>É HOJE! PARABÉNS!</span>
+                        <span className="text-sm">🎂</span>
+                      </div>
+                    ) : bdayInfo.isTomorrow ? (
+                      <div className="flex items-center space-x-1.5 bg-gradient-to-r from-rose-600 via-pink-600 to-purple-600 text-white text-[11px] font-bold px-3.5 py-1 rounded-full shadow-md shadow-pink-500/30 border-2 border-white animate-pulse tracking-wide">
+                        <span className="text-sm">🎂</span>
+                        <span>É AMANHÃ!</span>
+                        <span className="text-[10px] bg-white/25 px-1.5 py-0.5 rounded-full font-black">24h</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1.5 bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 text-white text-[11px] font-bold px-3.5 py-1 rounded-full shadow-md shadow-pink-500/25 border-2 border-white group-hover:scale-105 transition-transform tracking-wide">
+                        <span className="text-xs">🎂</span>
+                        <span>Níver em {bdayInfo.daysLeft} {bdayInfo.daysLeft === 1 ? 'dia' : 'dias'}!</span>
+                        <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-extrabold">🎈</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className={`absolute top-0 left-0 right-0 h-2.5 rounded-t-3xl ${color.bg}`} />
                 
                 <div>
                   <div className="flex items-start justify-between mb-3 mt-1.5">
@@ -1091,6 +1272,15 @@ function FriendsFeedView({
                           <div className="flex items-center space-x-1 text-[11px] text-slate-500 mt-0.5">
                             <Calendar className="w-3 h-3 text-rose-400 flex-shrink-0" />
                             <span className="truncate">Niver: {friend.birthday}</span>
+                            {bdayInfo && (
+                              <span className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+                                bdayInfo.isToday 
+                                  ? 'bg-amber-100 text-amber-800 animate-pulse font-extrabold' 
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                {bdayInfo.isToday ? 'Hoje!' : `em ${bdayInfo.daysLeft}d`}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1178,6 +1368,7 @@ function FriendDetailView({
 }) {
   const color = AVATAR_COLORS[friend.colorIndex || 0] || AVATAR_COLORS[0];
   const isMe = friend.id === currentProfileId;
+  const bdayInfo = getUpcomingBirthdayInfo(friend.birthday);
 
   return (
     <div className="space-y-6">
@@ -1205,9 +1396,16 @@ function FriendDetailView({
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
               {friend.birthday && (
-                <span className="flex items-center space-x-1 bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md font-semibold">
+                <span className="flex items-center space-x-1.5 bg-rose-50 text-rose-600 px-2.5 py-0.5 rounded-lg font-semibold border border-rose-200">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>Aniversário: {friend.birthday}</span>
+                  {bdayInfo && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold text-white shadow-sm ${
+                      bdayInfo.isToday ? 'bg-amber-500 animate-bounce' : 'bg-rose-500'
+                    }`}>
+                      {bdayInfo.isToday ? '🎉 É HOJE!' : `🎂 em ${bdayInfo.daysLeft}d`}
+                    </span>
+                  )}
                 </span>
               )}
               <span>{items.length} presentes cadastrados</span>
@@ -1247,6 +1445,43 @@ function FriendDetailView({
           )}
         </div>
       </div>
+
+      {/* Banner de Celebração de Aniversário Próximo (1 mês antes) */}
+      {bdayInfo && (
+        <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 text-white rounded-3xl p-4 sm:p-5 shadow-lg shadow-rose-500/20 border border-white/20 flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl flex-shrink-0 shadow-inner">
+              {bdayInfo.isToday ? '🎉' : '🎂'}
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest bg-white/30 text-white px-2 py-0.5 rounded-full">
+                  {bdayInfo.isToday ? 'É Hoje!' : 'Aniversário Chegando'}
+                </span>
+                <span className="text-xs text-rose-100 font-medium">
+                  {bdayInfo.isToday 
+                    ? 'Dia de muita festa!' 
+                    : bdayInfo.isTomorrow 
+                      ? 'Faltam menos de 24h!' 
+                      : `Faltam ${bdayInfo.daysLeft} dias`}
+                </span>
+              </div>
+              <h4 className="font-bold text-sm sm:text-base mt-0.5">
+                {bdayInfo.isToday 
+                  ? `Hoje é o dia de ${friend.name}! Parabéns! 🥳` 
+                  : bdayInfo.isTomorrow
+                    ? `Amanhã é o aniversário de ${friend.name}! 🎈`
+                    : `O aniversário de ${friend.name} é em ${bdayInfo.daysLeft} dias! 🎈`}
+              </h4>
+              <p className="text-xs text-rose-100 mt-0.5">
+                {isMe 
+                  ? 'Seu aniversário está pertinho! Mantenha seus presentes favoritos atualizados para suas amigas.'
+                  : 'Falta menos de 1 mês! Aproveite para escolher e reservar o presente dela abaixo.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Abas de Ocasião */}
       <div className="flex items-center gap-2 p-1.5 bg-white border border-rose-100 rounded-2xl shadow-sm overflow-x-auto">
@@ -2049,7 +2284,22 @@ function SwitchProfileModal({
                     <Avatar profile={p} size="md" />
                     <div className="text-left">
                       <span className="font-bold text-sm text-slate-800 block">{p.name}</span>
-                      {p.birthday && <span className="text-[11px] text-slate-400">🎂 {p.birthday}</span>}
+                      {p.birthday && (
+                        <div className="flex items-center space-x-1.5 text-[11px] text-slate-400">
+                          <span>🎂 {p.birthday}</span>
+                          {(() => {
+                            const info = getUpcomingBirthdayInfo(p.birthday);
+                            if (!info) return null;
+                            return (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                info.isToday ? 'bg-amber-100 text-amber-800 animate-pulse' : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                {info.isToday ? 'Hoje!' : `em ${info.daysLeft}d`}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   </div>
                   {isCurrent && (
