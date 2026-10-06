@@ -71,26 +71,26 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'amigas-wishlist';
 const STORAGE_PROFILE_KEY = 'lista_presentes_amigas_active_id';
 
 const AVATAR_COLORS = [
-  { name: 'Rosa Pastel', bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-300', dot: 'bg-rose-500' },
-  { name: 'Rosa Chiclete', bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-pink-300', dot: 'bg-pink-500' },
-  { name: 'Magenta Vibrante', bg: 'bg-pink-200', text: 'text-pink-800', border: 'border-pink-400', dot: 'bg-pink-600' },
-  { name: 'Lavanda Suave', bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300', dot: 'bg-purple-500' },
-  { name: 'Roxo Ametista', bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-300', dot: 'bg-violet-500' },
-  { name: 'Lilás Fúcsia', bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', border: 'border-fuchsia-300', dot: 'bg-fuchsia-500' },
-  { name: 'Pêssego Dourado', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300', dot: 'bg-amber-500' },
-  { name: 'Amarelo Baunilha', bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300', dot: 'bg-yellow-500' },
-  { name: 'Laranja Doce', bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', dot: 'bg-orange-500' },
-  { name: 'Coral Quente', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500' },
-  { name: 'Vermelho Rubi', bg: 'bg-rose-200', text: 'text-rose-800', border: 'border-rose-400', dot: 'bg-rose-600' },
-  { name: 'Menta Fresca', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', dot: 'bg-emerald-500' },
-  { name: 'Verde Sálvia', bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', dot: 'bg-green-500' },
-  { name: 'Verde Tiffany', bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300', dot: 'bg-teal-500' },
-  { name: 'Turquesa', bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300', dot: 'bg-cyan-500' },
-  { name: 'Azul Céu', bg: 'bg-sky-100', text: 'text-sky-700', border: 'border-sky-300', dot: 'bg-sky-500' },
-  { name: 'Azul Bebê', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', dot: 'bg-blue-500' },
-  { name: 'Índigo Noite', bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300', dot: 'bg-indigo-500' },
-  { name: 'Caramelo Nude', bg: 'bg-stone-200', text: 'text-stone-800', border: 'border-stone-400', dot: 'bg-stone-500' },
-  { name: 'Cinza Platina', bg: 'bg-slate-200', text: 'text-slate-800', border: 'border-slate-400', dot: 'bg-slate-500' },
+  { name: 'Pink Choque', bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-300', dot: 'bg-pink-500' },
+  { name: 'Fúcsia Vibrante', bg: 'bg-fuchsia-600', text: 'text-white', border: 'border-fuchsia-300', dot: 'bg-fuchsia-600' },
+  { name: 'Rosa Carmim', bg: 'bg-rose-500', text: 'text-white', border: 'border-rose-300', dot: 'bg-rose-500' },
+  { name: 'Roxo Elétrico', bg: 'bg-purple-600', text: 'text-white', border: 'border-purple-300', dot: 'bg-purple-600' },
+  { name: 'Violeta Intenso', bg: 'bg-violet-600', text: 'text-white', border: 'border-violet-300', dot: 'bg-violet-600' },
+  { name: 'Azul Royal', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-300', dot: 'bg-blue-600' },
+  { name: 'Índigo Profundo', bg: 'bg-indigo-600', text: 'text-white', border: 'border-indigo-300', dot: 'bg-indigo-600' },
+  { name: 'Azul Celeste Vivo', bg: 'bg-sky-500', text: 'text-white', border: 'border-sky-300', dot: 'bg-sky-500' },
+  { name: 'Ciano Neon', bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-300', dot: 'bg-cyan-500' },
+  { name: 'Verde Tiffany', bg: 'bg-teal-500', text: 'text-white', border: 'border-teal-300', dot: 'bg-teal-500' },
+  { name: 'Verde Esmeralda', bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-300', dot: 'bg-emerald-500' },
+  { name: 'Verde Bandeira', bg: 'bg-green-600', text: 'text-white', border: 'border-green-300', dot: 'bg-green-600' },
+  { name: 'Verde Limão Vivo', bg: 'bg-lime-600', text: 'text-white', border: 'border-lime-300', dot: 'bg-lime-600' },
+  { name: 'Amarelo Ouro Solar', bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-300', dot: 'bg-amber-500' },
+  { name: 'Laranja Fogo', bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-300', dot: 'bg-orange-500' },
+  { name: 'Coral Radiante', bg: 'bg-red-500', text: 'text-white', border: 'border-red-300', dot: 'bg-red-500' },
+  { name: 'Vermelho Cereja', bg: 'bg-rose-600', text: 'text-white', border: 'border-rose-400', dot: 'bg-rose-600' },
+  { name: 'Vermelho Paixão', bg: 'bg-red-600', text: 'text-white', border: 'border-red-400', dot: 'bg-red-600' },
+  { name: 'Púrpura Glamour', bg: 'bg-purple-700', text: 'text-white', border: 'border-purple-400', dot: 'bg-purple-700' },
+  { name: 'Azul Meia-Noite', bg: 'bg-blue-700', text: 'text-white', border: 'border-blue-400', dot: 'bg-blue-700' },
 ];
 
 function Avatar({ profile, size = "md", className = "" }) {
@@ -1764,7 +1764,7 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
             </label>
             <div className="flex items-center space-x-3.5 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
               <div className="relative flex-shrink-0">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm overflow-hidden border-2 ${AVATAR_COLORS[colorIndex]?.border || 'border-rose-300'} ${!photoUrl ? (AVATAR_COLORS[colorIndex]?.bg || 'bg-rose-100') + ' ' + (AVATAR_COLORS[colorIndex]?.text || 'text-rose-700') : 'bg-slate-200'}`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm overflow-hidden border-2 ${AVATAR_COLORS[colorIndex]?.border || 'border-pink-300'} ${!photoUrl ? (AVATAR_COLORS[colorIndex]?.bg || 'bg-pink-500') + ' ' + (AVATAR_COLORS[colorIndex]?.text || 'text-white') : 'bg-slate-200'}`}>
                   {photoUrl ? (
                     <img src={photoUrl} alt="Foto de perfil" className="w-full h-full object-cover" />
                   ) : (
@@ -1844,19 +1844,19 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
               </span>
             </div>
 
-            {/* Grade de 20 Cores */}
-            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 p-2.5 bg-slate-50/70 border border-slate-200 rounded-2xl max-h-36 overflow-y-auto">
+            {/* Grade de 20 Cores Vivas */}
+            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 p-2.5 bg-slate-100/90 border border-slate-200 rounded-2xl max-h-36 overflow-y-auto">
               {AVATAR_COLORS.map((col, idx) => (
                 <button
                   type="button"
                   key={col.name}
                   onClick={() => setColorIndex(idx)}
-                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${col.bg} border-2 flex items-center justify-center transition-all mx-auto ${
-                    colorIndex === idx ? 'border-slate-800 scale-110 shadow-md ring-2 ring-rose-400' : 'border-slate-200 hover:scale-110'
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${col.bg} border-2 flex items-center justify-center transition-all mx-auto shadow-sm ${
+                    colorIndex === idx ? 'border-slate-900 scale-125 shadow-md ring-2 ring-white' : 'border-white/60 hover:scale-115'
                   }`}
                   title={col.name}
                 >
-                  {colorIndex === idx && <Check className="w-3.5 h-3.5 text-slate-800" />}
+                  {colorIndex === idx && <Check className="w-4 h-4 text-white drop-shadow stroke-[3]" />}
                 </button>
               ))}
             </div>
