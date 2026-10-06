@@ -49,7 +49,9 @@ import {
   Smile,
   ShieldCheck,
   ChevronRight,
-  Camera
+  Camera,
+  Phone,
+  MapPin
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -321,6 +323,8 @@ export default function App() {
           name: cleanName || 'Amiga',
           birthday: formData.birthday?.trim() || '',
           notes: formData.notes?.trim() || '',
+          phone: formData.phone?.trim() || '',
+          address: formData.address?.trim() || '',
           colorIndex: Number.isInteger(formData.colorIndex) ? formData.colorIndex : 0,
           photoUrl: formData.photoUrl || '',
           createdAt: new Date().toISOString(),
@@ -346,6 +350,8 @@ export default function App() {
           name: cleanName || 'Amiga',
           birthday: formData.birthday?.trim() || '',
           notes: formData.notes?.trim() || '',
+          phone: formData.phone?.trim() || '',
+          address: formData.address?.trim() || '',
           colorIndex: Number.isInteger(formData.colorIndex) ? formData.colorIndex : 0,
           photoUrl: formData.photoUrl || '',
           updatedAt: new Date().toISOString()
@@ -1209,12 +1215,37 @@ function FriendDetailView({
           </div>
         </div>
 
-        {friend.notes && (
-          <div className="text-xs bg-amber-50/90 border border-amber-200 text-amber-900 p-3.5 rounded-2xl max-w-sm">
-            <span className="font-bold block mb-0.5 text-amber-950">Dicas & Tamanhos de {friend.name}:</span>
-            <p className="italic leading-relaxed">"{friend.notes}"</p>
-          </div>
-        )}
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+          {friend.notes && (
+            <div className="text-xs bg-amber-50/90 border border-amber-200 text-amber-900 p-3.5 rounded-2xl max-w-sm">
+              <span className="font-bold block mb-0.5 text-amber-950">Dicas & Tamanhos de {friend.name}:</span>
+              <p className="italic leading-relaxed">"{friend.notes}"</p>
+            </div>
+          )}
+
+          {(friend.phone || friend.address) && (
+            <div className="text-xs bg-purple-50/90 border border-purple-200 text-purple-950 p-3.5 rounded-2xl max-w-sm space-y-2">
+              <span className="font-bold block text-purple-900">📦 Dados para Entrega & Contato:</span>
+              {friend.phone && (
+                <div className="flex items-center space-x-1.5 text-slate-700">
+                  <Phone className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
+                  <span className="font-semibold text-slate-800">{friend.phone}</span>
+                </div>
+              )}
+              {friend.address && (
+                <div className="flex items-start space-x-1.5 text-slate-700">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Endereço de entrega:</span>
+                    <p className="leading-relaxed select-all font-medium text-[11px] bg-white/80 p-2 rounded-xl border border-purple-100">
+                      {friend.address}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Abas de Ocasião */}
@@ -1647,6 +1678,8 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
   
   const [name, setName] = useState('');
   const [birthday, setBirthday] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [colorIndex, setColorIndex] = useState(0);
   const [photoUrl, setPhotoUrl] = useState('');
@@ -1658,12 +1691,16 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
       if (isCreate) {
         setName('');
         setBirthday('');
+        setPhone('');
+        setAddress('');
         setNotes('');
         setColorIndex(Math.floor(Math.random() * AVATAR_COLORS.length));
         setPhotoUrl('');
       } else {
         setName(profileData?.name || '');
         setBirthday(profileData?.birthday || '');
+        setPhone(profileData?.phone || '');
+        setAddress(profileData?.address || '');
         setNotes(profileData?.notes || '');
         setColorIndex(profileData?.colorIndex || 0);
         setPhotoUrl(profileData?.photoUrl || '');
@@ -1722,7 +1759,7 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
     if (!name.trim()) return;
     setIsSubmitting(true);
     try {
-      await onSave({ name, birthday, notes, colorIndex, photoUrl }, mode, profileData?.id);
+      await onSave({ name, birthday, notes, colorIndex, photoUrl, phone, address }, mode, profileData?.id);
     } finally {
       setIsSubmitting(false);
     }
@@ -1831,6 +1868,45 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
               onChange={(e) => setBirthday(e.target.value)}
               className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:bg-white transition"
             />
+          </div>
+
+          {/* Campo Telefone / WhatsApp */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
+              <span>Telefone / WhatsApp</span>
+              <span className="text-[10px] text-slate-400 font-normal">opcional</span>
+            </label>
+            <div className="relative">
+              <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="tel"
+                placeholder="Ex: (11) 98765-4321"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:bg-white transition"
+              />
+            </div>
+          </div>
+
+          {/* Campo Endereço Completo para Entrega */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center justify-between">
+              <span>Endereço Completo para Entregas</span>
+              <span className="text-[10px] text-rose-500 font-semibold">para entrega de mimos</span>
+            </label>
+            <div className="relative">
+              <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <textarea
+                rows={2}
+                placeholder="Rua, Número, Complemento, Bairro, Cidade - UF, CEP"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-400 focus:bg-white transition"
+              />
+            </div>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">
+              💡 Suas amigas verão esse endereço quando forem comprar e enviar presentes para você!
+            </span>
           </div>
 
           {/* Seletor de Cor do Avatar */}
