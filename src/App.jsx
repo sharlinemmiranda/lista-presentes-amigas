@@ -71,13 +71,25 @@ const STORAGE_PROFILE_KEY = 'lista_presentes_amigas_active_id';
 
 const AVATAR_COLORS = [
   { name: 'Rosa Pastel', bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-300', dot: 'bg-rose-500' },
-  { name: 'Lavanda', bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300', dot: 'bg-purple-500' },
-  { name: 'Pêssego', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300', dot: 'bg-amber-500' },
-  { name: 'Menta', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', dot: 'bg-emerald-500' },
+  { name: 'Rosa Chiclete', bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-pink-300', dot: 'bg-pink-500' },
+  { name: 'Magenta Vibrante', bg: 'bg-pink-200', text: 'text-pink-800', border: 'border-pink-400', dot: 'bg-pink-600' },
+  { name: 'Lavanda Suave', bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300', dot: 'bg-purple-500' },
+  { name: 'Roxo Ametista', bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-300', dot: 'bg-violet-500' },
+  { name: 'Lilás Fúcsia', bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', border: 'border-fuchsia-300', dot: 'bg-fuchsia-500' },
+  { name: 'Pêssego Dourado', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300', dot: 'bg-amber-500' },
+  { name: 'Amarelo Baunilha', bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300', dot: 'bg-yellow-500' },
+  { name: 'Laranja Doce', bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', dot: 'bg-orange-500' },
+  { name: 'Coral Quente', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500' },
+  { name: 'Vermelho Rubi', bg: 'bg-rose-200', text: 'text-rose-800', border: 'border-rose-400', dot: 'bg-rose-600' },
+  { name: 'Menta Fresca', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-300', dot: 'bg-emerald-500' },
+  { name: 'Verde Sálvia', bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300', dot: 'bg-green-500' },
+  { name: 'Verde Tiffany', bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300', dot: 'bg-teal-500' },
+  { name: 'Turquesa', bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300', dot: 'bg-cyan-500' },
   { name: 'Azul Céu', bg: 'bg-sky-100', text: 'text-sky-700', border: 'border-sky-300', dot: 'bg-sky-500' },
-  { name: 'Lilás', bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', border: 'border-fuchsia-300', dot: 'bg-fuchsia-500' },
-  { name: 'Coral', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', dot: 'bg-red-500' },
-  { name: 'Indigo', bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300', dot: 'bg-indigo-500' },
+  { name: 'Azul Bebê', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', dot: 'bg-blue-500' },
+  { name: 'Índigo Noite', bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-300', dot: 'bg-indigo-500' },
+  { name: 'Caramelo Nude', bg: 'bg-stone-200', text: 'text-stone-800', border: 'border-stone-400', dot: 'bg-stone-500' },
+  { name: 'Cinza Platina', bg: 'bg-slate-200', text: 'text-slate-800', border: 'border-slate-400', dot: 'bg-slate-500' },
 ];
 
 const CATEGORIES = [
@@ -1706,21 +1718,43 @@ function ProfileModal({ isOpen, mode, profileData, onClose, onSave, onDeleteProf
 
           {/* Seletor de Cor do Avatar */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
-              Cor do seu Avatar
-            </label>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase">
+                Cor do seu Avatar ({AVATAR_COLORS.length} opções)
+              </label>
+              <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200">
+                {AVATAR_COLORS[colorIndex]?.name || 'Personalizado'}
+              </span>
+            </div>
+
+            {/* Preview dinâmico do Avatar */}
+            <div className="flex items-center space-x-3 p-2.5 bg-slate-50 border border-slate-200 rounded-2xl mb-2.5">
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shadow-sm transition-all ${AVATAR_COLORS[colorIndex]?.bg || 'bg-rose-100'} ${AVATAR_COLORS[colorIndex]?.text || 'text-rose-700'} border ${AVATAR_COLORS[colorIndex]?.border || 'border-rose-300'}`}>
+                {name.trim() ? name.trim().slice(0, 2).toUpperCase() : 'AM'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-bold text-slate-800 block truncate">
+                  {name.trim() || 'Seu Nome'}
+                </span>
+                <span className="text-[11px] text-slate-500 block truncate">
+                  Assim aparecerá o seu avatar no mural
+                </span>
+              </div>
+            </div>
+
+            {/* Grade de 20 Cores */}
+            <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 p-2.5 bg-slate-50/70 border border-slate-200 rounded-2xl max-h-36 overflow-y-auto">
               {AVATAR_COLORS.map((col, idx) => (
                 <button
                   type="button"
                   key={col.name}
                   onClick={() => setColorIndex(idx)}
-                  className={`w-8 h-8 rounded-full ${col.bg} border-2 flex items-center justify-center transition-all ${
-                    colorIndex === idx ? 'border-slate-800 scale-110 shadow-md ring-2 ring-rose-300' : 'border-transparent hover:scale-105'
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${col.bg} border-2 flex items-center justify-center transition-all mx-auto ${
+                    colorIndex === idx ? 'border-slate-800 scale-110 shadow-md ring-2 ring-rose-400' : 'border-slate-200 hover:scale-110'
                   }`}
                   title={col.name}
                 >
-                  {colorIndex === idx && <Check className="w-4 h-4 text-slate-800" />}
+                  {colorIndex === idx && <Check className="w-3.5 h-3.5 text-slate-800" />}
                 </button>
               ))}
             </div>
