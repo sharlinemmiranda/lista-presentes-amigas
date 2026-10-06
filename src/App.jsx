@@ -784,7 +784,7 @@ export default function App() {
             }`}
           >
             <Users className="w-4 h-4" />
-            <span className="font-sorean text-xs sm:text-sm tracking-wide">Mural das Luluzinhas</span>
+            <span>Mural das Luluzinhas</span>
             <span className="bg-rose-100 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
               {profilesList.length}
             </span>
@@ -816,7 +816,7 @@ export default function App() {
             }`}
           >
             <Heart className="w-4 h-4" />
-            <span className="font-sorean text-xs sm:text-sm tracking-wide">Minhas Listas</span>
+            <span>Minhas Listas</span>
             <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
               {myItems.length}
             </span>
