@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@font-face {
+  font-family: 'Sorean';
+  font-style: normal;
+  font-weight: normal;
+  font-display: swap;
+  src: local('Sorean'),
+       local('Sorean ExtBd'),
+       local('Sorean-Bold'),
+       url('/fonts/sorean.woff2') format('woff2'),
+       url('/fonts/sorean.ttf') format('truetype'),
+       url('https://db.onlinewebfonts.com/t/0d64aeaa07ac25e786ba01b39b275b25.woff2') format('woff2'),
+       url('https://db.onlinewebfonts.com/t/0d64aeaa07ac25e786ba01b39b275b25.ttf') format('truetype');
+}
+
+.font-sorean {
+  font-family: 'Sorean', 'Sorean ExtBd', cursive, sans-serif;
+}

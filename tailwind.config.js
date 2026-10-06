@@ -5,7 +5,11 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sorean: ['Sorean', 'Sorean ExtBd', 'cursive', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 }
