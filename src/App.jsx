@@ -51,7 +51,9 @@ import {
   ChevronRight,
   Camera,
   Phone,
-  MapPin
+  MapPin,
+  Clock,
+  Settings
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -71,6 +73,15 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'amigas-wishlist';
 
 // Chave para persistir qual amiga está acessando neste celular/computador
 const STORAGE_PROFILE_KEY = 'lista_presentes_amigas_active_id';
+const STORAGE_EVENT_INFO_KEY = 'lista_presentes_event_info';
+
+const DEFAULT_EVENT_INFO = {
+  title: 'Informações Importantes',
+  date: 'xx/xx/xxxx',
+  time: '00:00',
+  priceRange: 'de R$80,00 a R$100,00',
+  location: ''
+};
 
 const AVATAR_COLORS = [
   { name: 'Pink Choque', bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-300', dot: 'bg-pink-500' },
@@ -149,6 +160,12 @@ const PRIORITIES = [
 // -------------------------------------------------------------
 // Funções Utilitárias: Análise e Notificação de Aniversário
 // -------------------------------------------------------------
+export function isShaProfile(profile) {
+  if (!profile || !profile.name) return false;
+  const name = profile.name.trim().toLowerCase();
+  return name === 'sha' || name === 'sharline' || name.startsWith('sha ') || name.startsWith('sharline ');
+}
+
 export function parseBirthday(str) {
   if (!str || typeof str !== 'string') return null;
   const s = str.trim().toLowerCase();
@@ -280,6 +297,16 @@ export default function App() {
   const [deleteConfirmProfile, setDeleteConfirmProfile] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
+  // Informações Importantes do Evento
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [eventInfo, setEventInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_EVENT_INFO_KEY);
+      if (saved) return { ...DEFAULT_EVENT_INFO, ...JSON.parse(saved) };
+    } catch {}
+    return DEFAULT_EVENT_INFO;
+  });
+
   // Filtros
   const [activeOccasion, setActiveOccasion] = useState('todas');
   const [searchFilter, setSearchFilter] = useState('');
@@ -373,9 +400,27 @@ export default function App() {
       console.error("Erro ao carregar presentes:", error);
     });
 
+    // Documento público de Informações Importantes do Evento
+    const eventDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'eventInfo', 'main');
+    const unsubEvent = onSnapshot(eventDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setEventInfo(prev => ({
+          ...prev,
+          ...data
+        }));
+        try {
+          localStorage.setItem(STORAGE_EVENT_INFO_KEY, JSON.stringify(data));
+        } catch {}
+      }
+    }, (error) => {
+      console.warn("Aviso ao carregar dados do evento:", error);
+    });
+
     return () => {
       unsubProfiles();
       unsubItems();
+      unsubEvent();
     };
   }, []);
 
@@ -384,6 +429,9 @@ export default function App() {
     if (!activeProfileId) return null;
     return profilesList.find(p => p.id === activeProfileId) || null;
   }, [profilesList, activeProfileId]);
+
+  // Apenas o perfil Sha cadastrado tem permissão para configurações
+  const isSha = useMemo(() => isShaProfile(currentProfile), [currentProfile]);
 
   // Contagem de amigas com aniversário nos próximos 30 dias (1 mês de antecedência)
   const upcomingBirthdaysCount = useMemo(() => {
@@ -508,6 +556,33 @@ export default function App() {
       console.error("Erro ao excluir perfil:", err);
       showToast('Erro ao excluir perfil.');
     }
+  };
+
+  // Salvamento das Informações Importantes do Evento
+  const handleSaveEventInfo = async (newInfo) => {
+    if (!isSha) {
+      showToast('Apenas o perfil Sha pode alterar as configurações do evento.');
+      setEventModalOpen(false);
+      return;
+    }
+
+    setEventInfo(newInfo);
+    try {
+      localStorage.setItem(STORAGE_EVENT_INFO_KEY, JSON.stringify(newInfo));
+    } catch {}
+
+    try {
+      const eventDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'eventInfo', 'main');
+      await setDoc(eventDocRef, {
+        ...newInfo,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      showToast('Informações do evento atualizadas com sucesso! ✨');
+    } catch (err) {
+      console.error("Erro ao salvar no Firestore:", err);
+      showToast('Informações salvas localmente!');
+    }
+    setEventModalOpen(false);
   };
 
   // Salvamento de Presente
@@ -762,14 +837,16 @@ export default function App() {
               </div>
             )}
 
-            {/* Botão de Ajuda / Firebase Config */}
-            <button
-              onClick={() => setFirebaseHelpModalOpen(true)}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition hidden sm:flex items-center justify-center"
-              title="Ajuda e Configuração do Firebase"
-            >
-              <HelpCircle className="w-4 h-4" />
-            </button>
+            {/* Botão de Ajuda / Firebase Config (Apenas Sha) */}
+            {isSha && (
+              <button
+                onClick={() => setFirebaseHelpModalOpen(true)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition hidden sm:flex items-center justify-center"
+                title="Ajuda e Configuração do Firebase"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -827,6 +904,95 @@ export default function App() {
       {/* Conteúdo Principal */}
       <main className="flex-1 w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-5 sm:py-7">
         
+        {/* Dashboard de Informações Importantes */}
+        <div className="bg-gradient-to-r from-violet-700 via-purple-700 to-rose-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-purple-200/50 mb-6 relative overflow-hidden border border-white/10">
+          <div className="absolute -left-12 -top-12 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-rose-400/20 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div>
+                <div className="inline-flex items-center space-x-1.5 bg-white/20 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-semibold tracking-wide uppercase text-purple-100 mb-2.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Amigo Secreto</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight font-serif flex items-center gap-2">
+                  <span>{eventInfo.title || 'Informações Importantes'}</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-purple-100 mt-1">
+                  Confira as informações combinadas para a nossa confraternização:
+                </p>
+              </div>
+
+              {isSha && (
+                <button
+                  onClick={() => setEventModalOpen(true)}
+                  className="self-start sm:self-center bg-white/20 hover:bg-white/30 active:scale-95 text-white text-xs font-semibold px-3.5 py-2 rounded-2xl backdrop-blur-md border border-white/30 transition flex items-center space-x-1.5 shadow-sm"
+                  title="Configurações do Evento"
+                >
+                  <Settings className="w-3.5 h-3.5 text-amber-200" />
+                  <span>Configurações</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
+              {/* Card Data */}
+              <div className="bg-white/15 backdrop-blur-md hover:bg-white/20 transition-all rounded-2xl p-4 border border-white/20 shadow-sm flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 text-amber-200 shadow-sm">
+                  <Calendar className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-200 block">
+                    Data:
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-white tracking-wide truncate block">
+                    {eventInfo.date || 'xx/xx/xxxx'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Horário */}
+              <div className="bg-white/15 backdrop-blur-md hover:bg-white/20 transition-all rounded-2xl p-4 border border-white/20 shadow-sm flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 text-pink-200 shadow-sm">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-200 block">
+                    Horário:
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-white tracking-wide truncate block">
+                    {eventInfo.time || '00:00'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Valor para os presentes */}
+              <div className="bg-white/15 backdrop-blur-md hover:bg-white/20 transition-all rounded-2xl p-4 border border-white/20 shadow-sm flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 text-emerald-200 shadow-sm">
+                  <DollarSign className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-200 block">
+                    Valor para os presentes:
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-white tracking-wide truncate block">
+                    {eventInfo.priceRange || 'de R$80,00 a R$100,00'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {eventInfo.location && (
+              <div className="mt-4 pt-3.5 border-t border-white/15 flex items-center space-x-2 text-xs text-purple-100">
+                <MapPin className="w-4 h-4 text-amber-300 flex-shrink-0" />
+                <span className="font-semibold text-white">Local do Encontro:</span>
+                <span className="truncate">{eventInfo.location}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Banner de Boas-Vindas */}
         <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-purple-600 rounded-3xl p-6 sm:p-8 lg:p-9 text-white shadow-xl shadow-rose-200/50 mb-8 relative overflow-hidden">
           <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -1054,17 +1220,29 @@ export default function App() {
         />
       )}
 
+      {/* Modal de Edição das Informações Importantes */}
+      {eventModalOpen && (
+        <EventInfoModal
+          isOpen={eventModalOpen}
+          eventData={eventInfo}
+          onClose={() => setEventModalOpen(false)}
+          onSave={handleSaveEventInfo}
+        />
+      )}
+
       {/* Footer */}
       <footer className="mt-auto border-t border-rose-100/80 py-6 text-center text-xs text-rose-400 bg-white/60">
         <div className="w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>Feito com carinho para o clube das amigas • Dados sincronizados em tempo real 💖</p>
-          <button
-            onClick={() => setFirebaseHelpModalOpen(true)}
-            className="text-[11px] text-slate-400 hover:text-purple-600 underline flex items-center space-x-1"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Status do Banco de Dados & Ajuda</span>
-          </button>
+          {isSha && (
+            <button
+              onClick={() => setFirebaseHelpModalOpen(true)}
+              className="text-[11px] text-slate-400 hover:text-purple-600 underline flex items-center space-x-1"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Status do Banco de Dados & Ajuda</span>
+            </button>
+          )}
         </div>
       </footer>
     </div>
@@ -2743,6 +2921,164 @@ function FirebaseHelpModal({ isOpen, onClose, showToast }) {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Componente: Modal de Edição de Informações Importantes do Evento
+// -------------------------------------------------------------
+function EventInfoModal({ isOpen, eventData, onClose, onSave }) {
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [priceRange, setPriceRange] = useState('');
+  const [location, setLocation] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(eventData?.title || 'Informações Importantes');
+      setDate(eventData?.date || 'xx/xx/xxxx');
+      setTime(eventData?.time || '00:00');
+      setPriceRange(eventData?.priceRange || 'de R$80,00 a R$100,00');
+      setLocation(eventData?.location || '');
+      setIsSubmitting(false);
+    }
+  }, [isOpen, eventData]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        title: title.trim() || 'Informações Importantes',
+        date: date.trim() || 'xx/xx/xxxx',
+        time: time.trim() || '00:00',
+        priceRange: priceRange.trim() || 'de R$80,00 a R$100,00',
+        location: location.trim()
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-2xl border border-purple-100 my-8">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 font-serif">
+                Editar Informações do Evento
+              </h3>
+              <p className="text-xs text-slate-500">Atualize data, horário e valor dos presentes</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Título do Dashboard
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ex: Informações Importantes"
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-purple-500" />
+                <span>Data</span>
+              </label>
+              <input
+                type="text"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                placeholder="Ex: xx/xx/xxxx ou 20/12/2026"
+                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-pink-500" />
+                <span>Horário</span>
+              </label>
+              <input
+                type="text"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                placeholder="Ex: 00:00 ou 19:30"
+                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Valor para os presentes</span>
+            </label>
+            <input
+              type="text"
+              value={priceRange}
+              onChange={(e) => setPriceRange(e.target.value)}
+              placeholder="Ex: de R$80,00 a R$100,00"
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-rose-500" />
+              <span>Local ou Observação (Opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Ex: Casa da Sha / Restaurante..."
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+            />
+          </div>
+
+          <div className="pt-3 flex items-center justify-end space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-rose-600 hover:from-purple-700 hover:to-rose-700 rounded-xl shadow-md transition active:scale-95 disabled:opacity-50"
+            >
+              {isSubmitting ? 'Salvando...' : 'Salvar Informações'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
