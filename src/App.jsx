@@ -77,8 +77,8 @@ const STORAGE_EVENT_INFO_KEY = 'lista_presentes_event_info';
 
 const DEFAULT_EVENT_INFO = {
   title: 'Informações Importantes',
-  date: 'xx/xx/xxxx',
-  time: '00:00',
+  date: 'Primeira semana de dezembro, dia a definir',
+  time: 'Horário a definir',
   priceRange: 'de R$80,00 a R$100,00',
   location: ''
 };
@@ -302,7 +302,12 @@ export default function App() {
   const [eventInfo, setEventInfo] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_EVENT_INFO_KEY);
-      if (saved) return { ...DEFAULT_EVENT_INFO, ...JSON.parse(saved) };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.date === 'xx/xx/xxxx') parsed.date = DEFAULT_EVENT_INFO.date;
+        if (parsed.time === '00:00') parsed.time = DEFAULT_EVENT_INFO.time;
+        return { ...DEFAULT_EVENT_INFO, ...parsed };
+      }
     } catch {}
     return DEFAULT_EVENT_INFO;
   });
@@ -405,6 +410,8 @@ export default function App() {
     const unsubEvent = onSnapshot(eventDocRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
+        if (data.date === 'xx/xx/xxxx') data.date = DEFAULT_EVENT_INFO.date;
+        if (data.time === '00:00') data.time = DEFAULT_EVENT_INFO.time;
         setEventInfo(prev => ({
           ...prev,
           ...data
@@ -942,12 +949,12 @@ export default function App() {
                 <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 text-amber-200 shadow-sm">
                   <Calendar className="w-6 h-6" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-purple-200 block">
                     Data:
                   </span>
-                  <span className="text-base sm:text-lg font-bold text-white tracking-wide truncate block">
-                    {eventInfo.date || 'xx/xx/xxxx'}
+                  <span className="text-sm sm:text-base font-bold text-white tracking-wide block leading-snug">
+                    {eventInfo.date || 'Primeira semana de dezembro, dia a definir'}
                   </span>
                 </div>
               </div>
@@ -957,12 +964,12 @@ export default function App() {
                 <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0 text-pink-200 shadow-sm">
                   <Clock className="w-6 h-6" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-purple-200 block">
                     Horário:
                   </span>
-                  <span className="text-base sm:text-lg font-bold text-white tracking-wide truncate block">
-                    {eventInfo.time || '00:00'}
+                  <span className="text-sm sm:text-base font-bold text-white tracking-wide block leading-snug">
+                    {eventInfo.time || 'Horário a definir'}
                   </span>
                 </div>
               </div>
@@ -2940,8 +2947,8 @@ function EventInfoModal({ isOpen, eventData, onClose, onSave }) {
   useEffect(() => {
     if (isOpen) {
       setTitle(eventData?.title || 'Informações Importantes');
-      setDate(eventData?.date || 'xx/xx/xxxx');
-      setTime(eventData?.time || '00:00');
+      setDate(eventData?.date === 'xx/xx/xxxx' ? 'Primeira semana de dezembro, dia a definir' : (eventData?.date || 'Primeira semana de dezembro, dia a definir'));
+      setTime(eventData?.time === '00:00' ? 'Horário a definir' : (eventData?.time || 'Horário a definir'));
       setPriceRange(eventData?.priceRange || 'de R$80,00 a R$100,00');
       setLocation(eventData?.location || '');
       setIsSubmitting(false);
@@ -2956,8 +2963,8 @@ function EventInfoModal({ isOpen, eventData, onClose, onSave }) {
     try {
       await onSave({
         title: title.trim() || 'Informações Importantes',
-        date: date.trim() || 'xx/xx/xxxx',
-        time: time.trim() || '00:00',
+        date: date.trim() || 'Primeira semana de dezembro, dia a definir',
+        time: time.trim() || 'Horário a definir',
         priceRange: priceRange.trim() || 'de R$80,00 a R$100,00',
         location: location.trim()
       });
@@ -3013,7 +3020,7 @@ function EventInfoModal({ isOpen, eventData, onClose, onSave }) {
                 type="text"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                placeholder="Ex: xx/xx/xxxx ou 20/12/2026"
+                placeholder="Ex: Primeira semana de dezembro, dia a definir"
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
               />
             </div>
@@ -3027,7 +3034,7 @@ function EventInfoModal({ isOpen, eventData, onClose, onSave }) {
                 type="text"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                placeholder="Ex: 00:00 ou 19:30"
+                placeholder="Ex: Horário a definir ou 19:30"
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
               />
             </div>
